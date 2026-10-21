@@ -1,0 +1,17 @@
+{
+  "name": "don-repuestos-jaimes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Asistente virtual de ventas de repuestos Yamaha — Don Repuestos Jaimes",
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "db:migrar": "npm run db:migrar -w backend",
+    "db:demo": "npm run db:demo -w backend",
+    "crear-admin": "npm run crear-admin -w backend",
+    "test": "npm test -w backend",
+    "build": "npm run build -w backend && npm run build -w frontend"
+  },
+  "engines": { "node": ">=20" }
+}
