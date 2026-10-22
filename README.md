@@ -73,6 +73,7 @@ GitHub Pages solo sirve archivos estáticos, así que ahí se publica **solo el 
 - El workflow [.github/workflows/github-pages.yml](.github/workflows/github-pages.yml) compila el frontend en cada cambio a `main` y lo publica en la rama `gh-pages`.
 - En el repositorio: **Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)**.
 - Mientras no haya backend, la página muestra un aviso de que el chat y el panel no responden.
+- Backend y base de datos en Render: guía paso a paso en [docs/DESPLIEGUE_RENDER.md](docs/DESPLIEGUE_RENDER.md) (usa el Blueprint [render.yaml](render.yaml)).
 - Cuando publiques el backend: crea la variable `VITE_API_URL` (Settings → Secrets and variables → Actions → Variables) con su URL, agrega `https://<usuario>.github.io` a `CORS_ORIGENES` del backend y vuelve a ejecutar el workflow.
 
 ## Probar
@@ -123,6 +124,7 @@ docs/                   API, servicios externos, inventario, pendientes
 | [docs/API.md](docs/API.md) | Todos los endpoints, entradas y salidas |
 | [docs/CONFIGURACION_SERVICIOS.md](docs/CONFIGURACION_SERVICIOS.md) | n8n, WhatsApp, Telegram, avisos a asesores |
 | [docs/GUIA_INVENTARIO.md](docs/GUIA_INVENTARIO.md) | Cómo cargar productos, compatibilidades y stock reales |
+| [docs/DESPLIEGUE_RENDER.md](docs/DESPLIEGUE_RENDER.md) | Publicar backend y base de datos en Render |
 | [docs/PENDIENTES_PRODUCCION.md](docs/PENDIENTES_PRODUCCION.md) | Qué falta antes de salir a producción |
 | [docs/INFORME_FASES.md](docs/INFORME_FASES.md) | Resumen de cada fase, decisiones y errores encontrados |
 | [docs/PLAN_TECNICO.md](docs/PLAN_TECNICO.md) | Análisis, arquitectura y riesgos |

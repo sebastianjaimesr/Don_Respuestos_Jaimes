@@ -1,0 +1,45 @@
+# Blueprint de Render: crea el backend (Node) y la base de datos (PostgreSQL).
+# En Render: New → Blueprint → elige este repositorio. Guía en docs/DESPLIEGUE_RENDER.md
+services:
+  - type: web
+    name: drj-backend
+    runtime: node
+    plan: free
+    region: virginia
+    buildCommand: npm ci --include=dev && npm run build -w backend
+    # Antes de arrancar: migraciones, datos demo (si CARGAR_DEMO=true) y primer admin.
+    startCommand: npm run preparar -w backend && npm start -w backend
+    healthCheckPath: /api/salud
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: drj-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: CORS_ORIGENES
+        value: https://sebastianjaimesr.github.io
+      - key: CONFIAR_PROXY
+        value: "1"
+      # Datos FICTICIOS de demostración (DEMO-*). Pon "false" cuando cargues el inventario real.
+      - key: CARGAR_DEMO
+        value: "true"
+      # Render te los pide al crear el Blueprint (no quedan en git).
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: drj-db
+    plan: free
+    region: virginia
+    databaseName: drj
+    user: drj
+    postgresMajorVersion: "16"
