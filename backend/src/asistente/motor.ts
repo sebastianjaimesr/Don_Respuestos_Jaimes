@@ -824,7 +824,7 @@ async function escalar(s: Estado, motivo: MotivoEscalamiento, detalle: string, s
     const r = await escalarAHumano({ motivo, detalle, conversacion_id: s.conversacionId });
     const cfg = await obtenerConfiguracion();
     const contacto = cfg.contacto_humano?.confirmado && cfg.contacto_humano.valor ? ` También puedes escribir a: ${cfg.contacto_humano.valor}.` : '';
-    const horario = cfg.horario?.confirmado ? ` Nuestro horario es ${String(cfg.horario.valor).toLowerCase()}.` : '';
+    const horario = cfg.horario?.confirmado ? ` Nuestro horario es ${String(cfg.horario.valor).toLowerCase().replace(/\.$/, '')}.` : '';
     const inicio =
       motivo === 'cliente_molesto'
         ? 'Lamento mucho la molestia. Le pasé tu caso a un asesor de Don Repuestos Jaimes para que te atienda personalmente.'
@@ -844,7 +844,7 @@ async function responderInfoNegocio(s: Estado, intenciones: Set<string>) {
   const cfg = await obtenerConfiguracion();
   const partes: string[] = [];
   const conf = (k: string) => (cfg[k]?.confirmado && cfg[k].valor !== null ? cfg[k].valor : null);
-  if (intenciones.has('horario')) partes.push(conf('horario') ? `Atendemos ${String(conf('horario')).toLowerCase()}.` : 'El horario está pendiente de confirmar.');
+  if (intenciones.has('horario')) partes.push(conf('horario') ? `Atendemos ${String(conf('horario')).toLowerCase().replace(/\.$/, '')}.` : 'El horario está pendiente de confirmar.');
   if (intenciones.has('ubicacion')) partes.push(conf('direccion') ? `Estamos en ${conf('direccion')}.` : 'La dirección del local aún está pendiente de confirmar; un asesor te la puede compartir.');
   if (intenciones.has('pagos')) {
     const medios = (cfg.medios_pago?.valor as string[] | null) ?? [];

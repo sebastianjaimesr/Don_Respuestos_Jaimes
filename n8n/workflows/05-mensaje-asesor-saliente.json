@@ -1,0 +1,243 @@
+{
+  "id": "drj940c7db0403f5",
+  "name": "DRJ 05 · Mensaje del asesor al cliente",
+  "nodes": [
+    {
+      "id": "c33f591b-0db2-57b0-957c-a6ec0a770eaa",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "parameters": {
+        "content": "## DRJ 05 · Mensaje del asesor al cliente\nEl panel (Atención humana) llama este webhook (N8N_SALIENTE_URL) cuando un asesor responde a un cliente de WhatsApp o Telegram.\n\n**Entrada (firmada):** `{ canal, canal_usuario_id, texto }`\n\nVariables: DRJ_WEBHOOK_SECRET y las del canal correspondiente.",
+        "height": 420,
+        "width": 380
+      }
+    },
+    {
+      "id": "3ec1c1c3-92fd-5ef2-84ce-966b4128a315",
+      "name": "Mensaje del asesor",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "drj/saliente",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "webhookId": "cdd26e74-0638-5fb5-a16a-ad2107e52535"
+    },
+    {
+      "id": "c2ced2f6-505f-5a9a-820d-0d92f13cd703",
+      "name": "Verificar firma",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Verifica que la solicitud venga del backend de Don Repuestos Jaimes.\nconst crypto = require('crypto');\nconst secreto = $env.DRJ_WEBHOOK_SECRET;\nconst h = $json.headers || {};\nconst ts = String(h['x-drj-timestamp'] || '');\nconst firma = String(h['x-drj-firma'] || '');\nconst raw = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\nconst esperada = crypto.createHmac('sha256', secreto).update(`${ts}.${raw}`).digest('hex');\nconst vigente = Math.abs(Date.now() / 1000 - Number(ts)) < 300;\nconst valida = vigente && firma.length === esperada.length && crypto.timingSafeEqual(Buffer.from(firma), Buffer.from(esperada));\nif (!valida) throw new Error('Firma inválida: solicitud rechazada');\nreturn [{ json: JSON.parse(raw) }];"
+      }
+    },
+    {
+      "id": "39651795-f856-5f6d-a824-d1702535fa44",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ recibido: true }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "79cc4909-66d4-5abb-8c74-6cb7c5a0128d",
+      "name": "Separar por canal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const { canal, canal_usuario_id, texto } = $json;\nreturn [{ json: { canal, destino: canal_usuario_id, texto: String(texto).slice(0, 4000) } }];"
+      }
+    },
+    {
+      "id": "4b410ee0-0ab8-5ad8-a02a-23640b599533",
+      "name": "¿Es WhatsApp?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "return $json.canal === 'whatsapp' ? [{ json: $json }] : [];"
+      }
+    },
+    {
+      "id": "c2e58980-b433-5dd1-87fc-d058bd95cf10",
+      "name": "¿Es Telegram?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "parameters": {
+        "jsCode": "return $json.canal === 'telegram' ? [{ json: $json }] : [];"
+      }
+    },
+    {
+      "id": "528b461e-3094-5831-865b-bc4951745309",
+      "name": "WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $env.WHATSAPP_PHONE_NUMBER_ID }}/messages",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.destino, type: 'text', text: { body: $json.texto } }) }}",
+        "options": {
+          "timeout": 15000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.WHATSAPP_TOKEN }}"
+            }
+          ]
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "d40040eb-a8be-5e4f-af7a-1cd8fb9a5e33",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.destino, text: $json.texto }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Mensaje del asesor": {
+      "main": [
+        [
+          {
+            "node": "Verificar firma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar firma": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Separar por canal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar por canal": {
+      "main": [
+        [
+          {
+            "node": "¿Es WhatsApp?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Es Telegram?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Telegram?": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "drja0090a028efa5"
+  },
+  "meta": {
+    "generadoPor": "n8n/generar_workflows.py"
+  }
+}

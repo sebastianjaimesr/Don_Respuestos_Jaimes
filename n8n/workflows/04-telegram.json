@@ -1,0 +1,198 @@
+{
+  "id": "drj24558396c4e35",
+  "name": "DRJ 04 · Telegram",
+  "nodes": [
+    {
+      "id": "c33f591b-0db2-57b0-957c-a6ec0a770eaa",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "parameters": {
+        "content": "## DRJ 04 · Telegram\n1. Crea un bot con @BotFather y guarda el token.\n2. Registra el webhook:\n`https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://TU-N8N/webhook/drj/telegram&secret_token=<SECRETO>`\n\nVariables: DRJ_API_URL, DRJ_WEBHOOK_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET.",
+        "height": 420,
+        "width": 380
+      }
+    },
+    {
+      "id": "ccbae3e8-2981-5093-84a6-026dba92ef6a",
+      "name": "Mensaje Telegram",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "drj/telegram",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "1424904a-f250-5683-bb6a-5d50764a14b8"
+    },
+    {
+      "id": "2290d92a-3dfd-506f-aad4-c086af130ea5",
+      "name": "Verificar y extraer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Telegram envía X-Telegram-Bot-Api-Secret-Token si se configuró secret_token en setWebhook\nconst h = $json.headers || {};\nif (h['x-telegram-bot-api-secret-token'] !== $env.TELEGRAM_WEBHOOK_SECRET) throw new Error('Secreto de Telegram inválido');\nconst m = ($json.body || {}).message;\nif (!m || !m.text) return [];\nconst texto = m.text === '/start' ? 'hola' : m.text;\nreturn [{ json: { chat: m.chat.id, payload: { canal: 'telegram', canal_usuario_id: String(m.chat.id), texto } } }];"
+      }
+    },
+    {
+      "id": "82b3cefe-c0b2-50c4-8fe0-0eb30570dc1b",
+      "name": "Firmar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Firma HMAC-SHA256: firma = HMAC(DRJ_WEBHOOK_SECRET, `${ts}.${cuerpo}`)\n// Requiere NODE_FUNCTION_ALLOW_BUILTIN=crypto en el entorno de n8n.\nconst crypto = require('crypto');\nconst secreto = $env.DRJ_WEBHOOK_SECRET;\nif (!secreto) throw new Error('Falta la variable DRJ_WEBHOOK_SECRET en n8n');\nreturn items.map((item) => {\n  const cuerpo = JSON.stringify(item.json.payload);\n  const ts = Math.floor(Date.now() / 1000).toString();\n  const firma = crypto.createHmac('sha256', secreto).update(`${ts}.${cuerpo}`).digest('hex');\n  return { json: { ...item.json, cuerpo, ts, firma } };\n});"
+      }
+    },
+    {
+      "id": "46f5706b-d39f-5f67-90d1-065bcbe507bd",
+      "name": "Asistente (backend)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DRJ_API_URL }}/api/integraciones/mensaje",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-drj-timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "x-drj-firma",
+              "value": "={{ $json.firma }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.cuerpo }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "f99eeca2-c3aa-5052-8839-179795b5e956",
+      "name": "¿Hay respuesta?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const chat = $('Firmar').item.json.chat;\nconst t = ($json.data && $json.data.texto_respuesta) || '';\nreturn t ? [{ json: { chat, texto: t.slice(0, 4096) } }] : [];"
+      }
+    },
+    {
+      "id": "487b0654-6479-5f4f-a08e-1933cc1dba2f",
+      "name": "Enviar por Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $json.chat, text: $json.texto }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Mensaje Telegram": {
+      "main": [
+        [
+          {
+            "node": "Verificar y extraer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar y extraer": {
+      "main": [
+        [
+          {
+            "node": "Firmar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firmar": {
+      "main": [
+        [
+          {
+            "node": "Asistente (backend)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asistente (backend)": {
+      "main": [
+        [
+          {
+            "node": "¿Hay respuesta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay respuesta?": {
+      "main": [
+        [
+          {
+            "node": "Enviar por Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "drja0090a028efa5"
+  },
+  "meta": {
+    "generadoPor": "n8n/generar_workflows.py"
+  }
+}

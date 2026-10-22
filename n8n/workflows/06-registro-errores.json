@@ -1,0 +1,135 @@
+{
+  "id": "drja0090a028efa5",
+  "name": "DRJ 06 · Registro de errores",
+  "nodes": [
+    {
+      "id": "c33f591b-0db2-57b0-957c-a6ec0a770eaa",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "parameters": {
+        "content": "## DRJ 06 · Registro de errores\nEn cada workflow DRJ: Settings → Error workflow → \"DRJ 06 · Registro de errores\".\n\nEl error queda en el panel → Registro de eventos (tipo `n8n:workflow_fallido`), sin datos personales.",
+        "height": 420,
+        "width": 380
+      }
+    },
+    {
+      "id": "5a493590-3398-5e9a-ad55-fbec8eb1e1e8",
+      "name": "Error en un workflow",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "dbaff307-29f5-5f8f-a272-0f32ae7e4525",
+      "name": "Preparar evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const e = $json;\nreturn [{ json: { payload: {\n  nivel: 'error',\n  tipo: 'workflow_fallido',\n  mensaje: String((e.execution && e.execution.error && e.execution.error.message) || 'Error en workflow').slice(0, 1500),\n  datos: { workflow: e.workflow && e.workflow.name, nodo: e.execution && e.execution.lastNodeExecuted, ejecucion: e.execution && e.execution.id },\n} } }];"
+      }
+    },
+    {
+      "id": "82b3cefe-c0b2-50c4-8fe0-0eb30570dc1b",
+      "name": "Firmar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Firma HMAC-SHA256: firma = HMAC(DRJ_WEBHOOK_SECRET, `${ts}.${cuerpo}`)\n// Requiere NODE_FUNCTION_ALLOW_BUILTIN=crypto en el entorno de n8n.\nconst crypto = require('crypto');\nconst secreto = $env.DRJ_WEBHOOK_SECRET;\nif (!secreto) throw new Error('Falta la variable DRJ_WEBHOOK_SECRET en n8n');\nreturn items.map((item) => {\n  const cuerpo = JSON.stringify(item.json.payload);\n  const ts = Math.floor(Date.now() / 1000).toString();\n  const firma = crypto.createHmac('sha256', secreto).update(`${ts}.${cuerpo}`).digest('hex');\n  return { json: { ...item.json, cuerpo, ts, firma } };\n});"
+      }
+    },
+    {
+      "id": "5097e129-2a88-5da2-9f2c-b5ec792b595f",
+      "name": "Registrar en backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DRJ_API_URL }}/api/integraciones/eventos",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-drj-timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "x-drj-firma",
+              "value": "={{ $json.firma }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.cuerpo }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Error en un workflow": {
+      "main": [
+        [
+          {
+            "node": "Preparar evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar evento": {
+      "main": [
+        [
+          {
+            "node": "Firmar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firmar": {
+      "main": [
+        [
+          {
+            "node": "Registrar en backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "generadoPor": "n8n/generar_workflows.py"
+  }
+}

@@ -110,7 +110,7 @@ describe('webhooks e integraciones', () => {
       req.on('data', (c) => (cuerpo += c));
       req.on('end', () => {
         recibido = { cuerpo, ts: String(req.headers['x-drj-timestamp']), firma: String(req.headers['x-drj-firma']) };
-        res.writeHead(200).end('{}');
+        res.writeHead(200, { 'content-type': 'application/json' }).end('{"recibido":true}');
       });
     });
     await new Promise<void>((ok) => servidor.listen(4599, '127.0.0.1', ok));

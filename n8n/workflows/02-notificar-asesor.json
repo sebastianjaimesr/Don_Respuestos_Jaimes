@@ -1,0 +1,160 @@
+{
+  "id": "drjec3fcdff4dc25",
+  "name": "DRJ 02 · Notificar asesor (escalamiento)",
+  "nodes": [
+    {
+      "id": "c33f591b-0db2-57b0-957c-a6ec0a770eaa",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "parameters": {
+        "content": "## DRJ 02 · Notificar asesor\nEl backend llama este webhook (N8N_NOTIFICACION_URL) cuando el asistente escala una conversación.\n\n**Entrada (firmada):** `{ evento: \"escalamiento_creado\", transferencia_id, motivo, detalle, conversacion_id, creado }`\n\n**Aviso:** se envía `{ text, content }` a DRJ_AVISO_ASESOR_URL (webhook entrante de Slack, Discord, Google Chat o un bot propio). Si está vacía, no se envía nada y la solicitud queda pendiente en el panel.\n\nVariables: DRJ_WEBHOOK_SECRET, DRJ_AVISO_ASESOR_URL (opcional).",
+        "height": 420,
+        "width": 380
+      }
+    },
+    {
+      "id": "08b88eb7-bd12-5d00-a754-a7142340c4f5",
+      "name": "Escalamiento creado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "drj/escalamiento",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "webhookId": "69d5bf99-7736-5599-936c-8fdfab0062f7"
+    },
+    {
+      "id": "c2ced2f6-505f-5a9a-820d-0d92f13cd703",
+      "name": "Verificar firma",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Verifica que la solicitud venga del backend de Don Repuestos Jaimes.\nconst crypto = require('crypto');\nconst secreto = $env.DRJ_WEBHOOK_SECRET;\nconst h = $json.headers || {};\nconst ts = String(h['x-drj-timestamp'] || '');\nconst firma = String(h['x-drj-firma'] || '');\nconst raw = (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8');\nconst esperada = crypto.createHmac('sha256', secreto).update(`${ts}.${raw}`).digest('hex');\nconst vigente = Math.abs(Date.now() / 1000 - Number(ts)) < 300;\nconst valida = vigente && firma.length === esperada.length && crypto.timingSafeEqual(Buffer.from(firma), Buffer.from(esperada));\nif (!valida) throw new Error('Firma inválida: solicitud rechazada');\nreturn [{ json: JSON.parse(raw) }];"
+      }
+    },
+    {
+      "id": "1e106689-601f-534a-becb-d1ef48b6dfa9",
+      "name": "Preparar aviso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Si no hay canal de aviso configurado, se detiene aquí (la solicitud ya quedó en el panel).\nif (!$env.DRJ_AVISO_ASESOR_URL) return [];\nconst e = $json;\nconst texto = `🔔 Don Repuestos Jaimes: solicitud de atención #${e.transferencia_id}\\nMotivo: ${e.motivo}${e.detalle ? '\\nDetalle: ' + e.detalle : ''}\\nRevísala en el panel → Atención humana.`;\nreturn [{ json: { text: texto, content: texto } }];"
+      }
+    },
+    {
+      "id": "f5a6ae61-0504-556e-9a36-bbb501cddb96",
+      "name": "Enviar aviso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DRJ_AVISO_ASESOR_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "39651795-f856-5f6d-a824-d1702535fa44",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ recibido: true }) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Escalamiento creado": {
+      "main": [
+        [
+          {
+            "node": "Verificar firma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar firma": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Preparar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar aviso": {
+      "main": [
+        [
+          {
+            "node": "Enviar aviso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "drja0090a028efa5"
+  },
+  "meta": {
+    "generadoPor": "n8n/generar_workflows.py"
+  }
+}

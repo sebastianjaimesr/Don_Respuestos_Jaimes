@@ -1,0 +1,234 @@
+{
+  "id": "drj2291a698733e5",
+  "name": "DRJ 01 · Mensaje entrante (genérico)",
+  "nodes": [
+    {
+      "id": "c33f591b-0db2-57b0-957c-a6ec0a770eaa",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -260
+      ],
+      "parameters": {
+        "content": "## DRJ 01 · Mensaje entrante genérico\nCliente → canal → **este webhook** → backend → respuesta.\n\n**Entrada (POST /webhook/drj/mensaje):**\n`{ \"canal\": \"whatsapp\", \"canal_usuario_id\": \"573001234567\", \"texto\": \"pastillas fz 2.0 2018\" }`\n\n**Salida:** `{ ok, conversacion_id, asesor_atendiendo, texto_respuesta, respuestas[] }`\n\nLa intención, el modelo, el año y el repuesto los identifica el backend (no n8n), así la lógica es la misma en todos los canales.\n\nVariables: DRJ_API_URL, DRJ_WEBHOOK_SECRET.",
+        "height": 420,
+        "width": 380
+      }
+    },
+    {
+      "id": "21fb51c7-db8b-553b-9407-87bb5824f892",
+      "name": "Recibir mensaje",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "drj/mensaje",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "c4a21013-f6b4-5458-a9ae-1f87483cb32c"
+    },
+    {
+      "id": "638e2559-bd02-57fa-a196-035a418a3a2a",
+      "name": "Validar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Entrada esperada: { \"canal\": \"whatsapp\"|\"telegram\"|\"otro\", \"canal_usuario_id\": \"...\", \"texto\": \"...\" }\nconst b = $json.body || {};\nconst canal = ['whatsapp', 'telegram', 'otro'].includes(b.canal) ? b.canal : 'otro';\nconst usuario = String(b.canal_usuario_id || '').slice(0, 120);\nconst texto = String(b.texto || '').slice(0, 1000);\nif (!usuario || !texto) throw new Error('Faltan canal_usuario_id o texto');\nreturn [{ json: { payload: { canal, canal_usuario_id: usuario, texto } } }];"
+      }
+    },
+    {
+      "id": "82b3cefe-c0b2-50c4-8fe0-0eb30570dc1b",
+      "name": "Firmar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        330,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Firma HMAC-SHA256: firma = HMAC(DRJ_WEBHOOK_SECRET, `${ts}.${cuerpo}`)\n// Requiere NODE_FUNCTION_ALLOW_BUILTIN=crypto en el entorno de n8n.\nconst crypto = require('crypto');\nconst secreto = $env.DRJ_WEBHOOK_SECRET;\nif (!secreto) throw new Error('Falta la variable DRJ_WEBHOOK_SECRET en n8n');\nreturn items.map((item) => {\n  const cuerpo = JSON.stringify(item.json.payload);\n  const ts = Math.floor(Date.now() / 1000).toString();\n  const firma = crypto.createHmac('sha256', secreto).update(`${ts}.${cuerpo}`).digest('hex');\n  return { json: { ...item.json, cuerpo, ts, firma } };\n});"
+      }
+    },
+    {
+      "id": "46f5706b-d39f-5f67-90d1-065bcbe507bd",
+      "name": "Asistente (backend)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DRJ_API_URL }}/api/integraciones/mensaje",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-drj-timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "x-drj-firma",
+              "value": "={{ $json.firma }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.cuerpo }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ce2519ad-96ef-57f6-a588-bb495e643d51",
+      "name": "Formatear respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const d = $json.data || {};\nreturn [{ json: { ok: true, conversacion_id: d.conversacion_id, asesor_atendiendo: d.asesor_atendiendo, texto_respuesta: d.texto_respuesta, respuestas: d.respuestas } }];"
+      }
+    },
+    {
+      "id": "c0f9d6d2-8a69-54b3-a3a0-820703745b42",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -80
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "48eaefea-de6e-5c1f-bd13-f04c69d9a237",
+      "name": "Responder error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        120
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ ok: false, texto_respuesta: \"Tuvimos un problema técnico. Intenta de nuevo en un momento, por favor.\" }) }}",
+        "options": {
+          "responseCode": 502,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Recibir mensaje": {
+      "main": [
+        [
+          {
+            "node": "Validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar": {
+      "main": [
+        [
+          {
+            "node": "Firmar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Firmar": {
+      "main": [
+        [
+          {
+            "node": "Asistente (backend)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asistente (backend)": {
+      "main": [
+        [
+          {
+            "node": "Formatear respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear respuesta": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "drja0090a028efa5"
+  },
+  "meta": {
+    "generadoPor": "n8n/generar_workflows.py"
+  }
+}

@@ -1,0 +1,42 @@
+# Apoyo para desarrollo local: PostgreSQL + n8n.
+# NOTA: este archivo no se pudo probar en el entorno donde se construyó el proyecto
+# (no había Docker disponible). Revísalo antes de usarlo.
+# Uso:  cp .env.docker.example .env.docker  &&  docker compose --env-file .env.docker up -d
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: drj
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}
+      POSTGRES_DB: drj
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      # Permite usar el módulo crypto en los nodos Code (firmas HMAC)
+      NODE_FUNCTION_ALLOW_BUILTIN: crypto
+      # Permite leer $env en los workflows (secretos fuera del JSON)
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      DRJ_API_URL: ${DRJ_API_URL:-http://host.docker.internal:4000}
+      DRJ_WEBHOOK_SECRET: ${DRJ_WEBHOOK_SECRET:?define DRJ_WEBHOOK_SECRET}
+      DRJ_AVISO_ASESOR_URL: ${DRJ_AVISO_ASESOR_URL:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8ndata:/home/node/.n8n
+
+volumes:
+  pgdata:
+  n8ndata:

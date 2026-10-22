@@ -17,7 +17,11 @@ export function verificarFirma(secreto: string, timestamp: string, cuerpo: strin
   return esperada.length === recibida.length && crypto.timingSafeEqual(esperada, recibida);
 }
 
-/** Envía un JSON firmado a una URL externa (n8n). Devuelve true si respondió 2xx. */
+/**
+ * Envía un JSON firmado a una URL externa (n8n).
+ * Devuelve true solo si respondió 2xx con { "recibido": true }: así no confundimos
+ * "n8n contestó algo" con "n8n procesó el aviso" (n8n responde 200 vacío aunque el flujo falle).
+ */
 export async function enviarFirmado(url: string, secreto: string, datos: unknown, timeoutMs = 5000): Promise<boolean> {
   const cuerpo = JSON.stringify(datos);
   const ts = Math.floor(Date.now() / 1000).toString();
@@ -27,5 +31,7 @@ export async function enviarFirmado(url: string, secreto: string, datos: unknown
     body: cuerpo,
     signal: AbortSignal.timeout(timeoutMs),
   });
-  return res.ok;
+  if (!res.ok) return false;
+  const respuesta = (await res.json().catch(() => null)) as { recibido?: unknown } | null;
+  return respuesta?.recibido === true;
 }
