@@ -1,0 +1,41 @@
+# Publica el frontend (chat + panel) en GitHub Pages, en la rama gh-pages.
+# GitHub Pages solo sirve archivos estáticos: el backend y PostgreSQL van en otro hosting.
+# Cuando tengas el backend publicado, crea la variable del repositorio VITE_API_URL
+# (Settings → Secrets and variables → Actions → Variables) con su URL, por ejemplo https://api.tudominio.com
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**', 'package-lock.json', '.github/workflows/github-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Compilar frontend
+        run: npm run build -w frontend
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SIN_SERVIDOR: ${{ vars.VITE_API_URL == '' && '1' || '0' }}
+      # Las rutas como /admin las resuelve React: 404.html carga la misma app.
+      - run: cp frontend/dist/index.html frontend/dist/404.html && touch frontend/dist/.nojekyll
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: frontend/dist
