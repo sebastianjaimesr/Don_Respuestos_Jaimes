@@ -66,6 +66,15 @@ npm run dev:frontend         # Web en http://localhost:5173
 
 Si prefieres Docker para PostgreSQL y n8n, hay un [docker-compose.yml](docker-compose.yml) de apoyo (ver nota en ese archivo).
 
+## Publicar en GitHub Pages
+
+GitHub Pages solo sirve archivos estáticos, así que ahí se publica **solo el frontend** (chat y panel). El backend y PostgreSQL necesitan otro hosting (ver [docs/PENDIENTES_PRODUCCION.md](docs/PENDIENTES_PRODUCCION.md)).
+
+- El workflow [.github/workflows/github-pages.yml](.github/workflows/github-pages.yml) compila el frontend en cada cambio a `main` y lo publica en la rama `gh-pages`.
+- En el repositorio: **Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)**.
+- Mientras no haya backend, la página muestra un aviso de que el chat y el panel no responden.
+- Cuando publiques el backend: crea la variable `VITE_API_URL` (Settings → Secrets and variables → Actions → Variables) con su URL, agrega `https://<usuario>.github.io` a `CORS_ORIGENES` del backend y vuelve a ejecutar el workflow.
+
 ## Probar
 
 ```bash
