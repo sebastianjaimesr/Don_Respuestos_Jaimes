@@ -21,7 +21,8 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 
 ## 3. Infraestructura
 
-- [ ] Elegir hosting: backend Node.js (Render, Railway, Fly.io o un VPS), PostgreSQL administrado con backups diarios, frontend estático (Netlify, Vercel, Cloudflare Pages o el mismo VPS con Nginx).
+- [x] Hosting de demostración: frontend en GitHub Pages y backend + PostgreSQL en Render plan gratis ([DESPLIEGUE_RENDER.md](DESPLIEGUE_RENDER.md)).
+- [ ] Para producción: plan pago de Render (o Railway/VPS) con PostgreSQL con backups diarios; el plan gratis se duerme y su base de datos vence.
 - [ ] HTTPS obligatorio en todos los dominios (también en n8n).
 - [ ] `NODE_ENV=production`, `CORS_ORIGENES` con el dominio real, `CONFIAR_PROXY` según el proxy usado.
 - [ ] Secretos nuevos y largos para `JWT_SECRET` y `WEBHOOK_SECRET` (nunca los de desarrollo).

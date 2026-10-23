@@ -126,6 +126,7 @@ docs/                   API, servicios externos, inventario, pendientes
 | [docs/GUIA_INVENTARIO.md](docs/GUIA_INVENTARIO.md) | Cómo cargar productos, compatibilidades y stock reales |
 | [docs/DESPLIEGUE_RENDER.md](docs/DESPLIEGUE_RENDER.md) | Publicar backend y base de datos en Render |
 | [docs/PENDIENTES_PRODUCCION.md](docs/PENDIENTES_PRODUCCION.md) | Qué falta antes de salir a producción |
+| [docs/VERIFICACION_ENTREGA.md](docs/VERIFICACION_ENTREGA.md) | Resultado de la verificación final para la entrega |
 | [docs/INFORME_FASES.md](docs/INFORME_FASES.md) | Resumen de cada fase, decisiones y errores encontrados |
 | [docs/PLAN_TECNICO.md](docs/PLAN_TECNICO.md) | Análisis, arquitectura y riesgos |
 
