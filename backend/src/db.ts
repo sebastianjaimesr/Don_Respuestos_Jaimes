@@ -7,6 +7,10 @@ types.setTypeParser(20, (v) => parseInt(v, 10));
 
 export const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10 });
 
+// Si PostgreSQL cierra una conexión inactiva (reinicio, mantenimiento del hosting), el pool la descarta
+// y abre otra. Sin este manejador, ese evento tumbaría todo el servidor.
+pool.on('error', (e) => console.error(`Conexión inactiva con PostgreSQL cerrada: ${e.message}`));
+
 export type Consultor = Pick<PoolClient, 'query'>;
 
 /** Ejecuta `fn` dentro de una transacción. Si algo falla, hace ROLLBACK. */

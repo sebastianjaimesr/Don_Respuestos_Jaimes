@@ -34,6 +34,8 @@ Si no se creó el administrador (por ejemplo, contraseña débil), el log del se
 
 ## Paso 2 — Decirle a la página dónde está el backend
 
+El workflow ya usa `https://drj-backend.onrender.com` por defecto. Solo haz esto si tu servicio quedó con otra URL:
+
 1. En GitHub: repositorio → **Settings → Secrets and variables → Actions → pestaña Variables → New repository variable**.
 2. Nombre: `VITE_API_URL`. Valor: la URL del paso 1.6, **sin** `/` al final.
 3. **Actions → GitHub Pages → Run workflow** para volver a publicar la página.

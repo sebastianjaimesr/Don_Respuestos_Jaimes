@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
+import { Client } from 'pg';
 import request from 'supertest';
 import { pool } from '../../src/db';
 import { firmar, verificarFirma } from '../../src/utils/firma';
@@ -164,6 +165,22 @@ describe('[13] error de base de datos', () => {
     expect(r.respuestas[0].tipo).toBe('error');
     expect(r.respuestas[0].texto).toMatch(/problema técnico/);
     expect(r.respuestas[0].texto).not.toMatch(/\$/);
+  });
+
+  it('el servidor sigue vivo si PostgreSQL cierra las conexiones inactivas', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await Promise.all([pool.query('SELECT 1'), pool.query('SELECT 1')]);
+    const admin = new Client({ connectionString: process.env.DATABASE_URL });
+    await admin.connect();
+    try {
+      await admin.query('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()');
+    } finally {
+      await admin.end();
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    const r = await request(app).get('/api/salud');
+    expect(r.status).toBe(200);
+    expect(r.body.data.base_datos).toBe('ok');
   });
 
   it('salud informa cuando la base de datos no responde', async () => {
