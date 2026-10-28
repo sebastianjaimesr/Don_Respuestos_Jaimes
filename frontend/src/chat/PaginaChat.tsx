@@ -39,50 +39,98 @@ const desdeApi = (m: MensajeApi): MensajeUI => ({
   acciones: m.metadata?.acciones ?? [],
 });
 
+// Si el servidor no responde (por ejemplo, porque estaba en pausa), se reintenta durante este tiempo.
+const REINTENTAR_DURANTE_MS = 3 * 60_000;
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const reintentable = (e: unknown) => !(e instanceof ErrorApi) || e.status === 0 || e.status >= 500;
+
 export default function PaginaChat() {
   const [convId, setConvId] = useState<string | null>(null);
+  const [conexion, setConexion] = useState<'conectando' | 'lista' | 'fallida'>('conectando');
+  const [segundos, setSegundos] = useState(0);
   const [mensajes, setMensajes] = useState<MensajeUI[]>([]);
   const [estado, setEstado] = useState<'activa' | 'escalada' | 'cerrada'>('activa');
   const [texto, setTexto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [horario, setHorario] = useState<string | null>(null);
+  // Mensaje escrito antes de conectar: se envía apenas haya conversación
+  const pendiente = useRef<string | null>(null);
+  const [hayPendiente, setHayPendiente] = useState(false);
+  const conectando = useRef(false);
   const finRef = useRef<HTMLDivElement>(null);
   const local = useRef(0);
 
   const iniciar = useCallback(async () => {
-    setError(null);
     const r = await api<{ conversacion_id: string; estado: typeof estado; respuestas: RespuestaApi[] }>('/chat/conversaciones', { metodo: 'POST' });
     guardarConv(r.conversacion_id);
     setConvId(r.conversacion_id);
     setEstado(r.estado);
-    setMensajes(r.respuestas.map((x) => ({ id: x.mensaje_id, rol: 'asistente', texto: x.texto, tipo: x.tipo, datos: x.datos, acciones: x.acciones ?? [] })));
+    setMensajes((prev) => [
+      ...r.respuestas.map((x) => ({ id: x.mensaje_id, rol: 'asistente' as const, texto: x.texto, tipo: x.tipo, datos: x.datos, acciones: x.acciones ?? [] })),
+      ...prev.filter((m) => m.rol === 'cliente'),
+    ]);
   }, []);
 
-  // Al abrir: retomar la conversación guardada o crear una nueva
-  useEffect(() => {
+  // Retoma la conversación guardada o crea una nueva
+  const abrir = useCallback(async () => {
     const guardada = leerConv();
-    (async () => {
+    if (guardada) {
       try {
-        if (guardada) {
-          const r = await api<{ estado: typeof estado; mensajes: MensajeApi[] }>(`/chat/conversaciones/${guardada}/mensajes`);
-          if (r.estado !== 'cerrada') {
-            setConvId(guardada);
-            setEstado(r.estado);
-            setMensajes(r.mensajes.map(desdeApi));
+        const r = await api<{ estado: typeof estado; mensajes: MensajeApi[] }>(`/chat/conversaciones/${guardada}/mensajes`);
+        if (r.estado !== 'cerrada') {
+          setConvId(guardada);
+          setEstado(r.estado);
+          setMensajes((prev) => [...r.mensajes.map(desdeApi), ...prev.filter((m) => m.rol === 'cliente')]);
+          return;
+        }
+      } catch (e) {
+        if (!(e instanceof ErrorApi && e.status === 404)) throw e;
+      }
+    }
+    await iniciar();
+  }, [iniciar]);
+
+  const conectar = useCallback(async () => {
+    if (conectando.current) return;
+    conectando.current = true;
+    setConexion('conectando');
+    setError(null);
+    const inicio = Date.now();
+    try {
+      for (let intento = 1; ; intento++) {
+        try {
+          await abrir();
+          setConexion('lista');
+          api<Record<string, { valor: unknown; confirmado: boolean }>>('/negocio')
+            .then((n) => setHorario(n.horario?.confirmado ? String(n.horario.valor) : null))
+            .catch(() => undefined);
+          return;
+        } catch (e) {
+          if (!reintentable(e) || Date.now() - inicio > REINTENTAR_DURANTE_MS) {
+            setConexion('fallida');
+            setError(e instanceof ErrorApi ? e.message : 'No pudimos iniciar el chat.');
             return;
           }
+          await esperar(Math.min(5000 * intento, 15000));
         }
-        await iniciar();
-      } catch (e) {
-        if (e instanceof ErrorApi && e.status === 404) return iniciar().catch(() => setError('No pudimos iniciar el chat. Intenta recargar la página.'));
-        setError(e instanceof ErrorApi ? e.message : 'No pudimos iniciar el chat.');
       }
-    })();
-    api<Record<string, { valor: unknown; confirmado: boolean }>>('/negocio')
-      .then((n) => setHorario(n.horario?.confirmado ? String(n.horario.valor) : null))
-      .catch(() => undefined);
-  }, [iniciar]);
+    } finally {
+      conectando.current = false;
+    }
+  }, [abrir]);
+
+  useEffect(() => {
+    void conectar();
+  }, [conectar]);
+
+  // Contador visible mientras se conecta
+  useEffect(() => {
+    if (conexion !== 'conectando') return;
+    setSegundos(0);
+    const t = setInterval(() => setSegundos((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [conexion]);
 
   useEffect(() => {
     finRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -105,12 +153,14 @@ export default function PaginaChat() {
     return () => clearInterval(t);
   }, [convId, estado, mensajes]);
 
-  async function enviar(cuerpo: { texto?: string; accion?: AccionEntrada; etiqueta_accion?: string }, mostrar: string) {
+  async function enviar(cuerpo: { texto?: string; accion?: AccionEntrada; etiqueta_accion?: string }, mostrar: string, yaMostrado = false) {
     if (!convId || enviando) return;
     setEnviando(true);
     setError(null);
-    local.current -= 1;
-    setMensajes((m) => [...m, { id: `local${local.current}`, rol: 'cliente', texto: mostrar, tipo: 'texto', acciones: [] }]);
+    if (!yaMostrado) {
+      local.current -= 1;
+      setMensajes((m) => [...m, { id: `local${local.current}`, rol: 'cliente', texto: mostrar, tipo: 'texto', acciones: [] }]);
+    }
     try {
       const r = await api<{ estado: typeof estado; asesor_atendiendo: boolean; respuestas: RespuestaApi[] }>(`/chat/conversaciones/${convId}/mensajes`, {
         metodo: 'POST',
@@ -120,24 +170,44 @@ export default function PaginaChat() {
       setMensajes((m) => [...m, ...r.respuestas.map((x) => ({ id: x.mensaje_id, rol: 'asistente' as const, texto: x.texto, tipo: x.tipo, datos: x.datos, acciones: x.acciones ?? [] }))]);
     } catch (e) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo enviar el mensaje.');
+      // Se devuelve el texto al campo para que el cliente no tenga que escribirlo otra vez
+      if (cuerpo.texto) setTexto((actual) => actual || cuerpo.texto!);
     } finally {
       setEnviando(false);
     }
   }
+
+  // Apenas hay conversación, se envía lo que el cliente escribió mientras conectaba
+  useEffect(() => {
+    if (!convId || !pendiente.current) return;
+    const t = pendiente.current;
+    pendiente.current = null;
+    setHayPendiente(false);
+    void enviar({ texto: t }, t, true);
+  }, [convId]);
 
   const alEnviar = (e: FormEvent) => {
     e.preventDefault();
     const t = texto.trim();
     if (!t) return;
     setTexto('');
+    if (!convId) {
+      pendiente.current = t;
+      setHayPendiente(true);
+      local.current -= 1;
+      setMensajes((m) => [...m, { id: `local${local.current}`, rol: 'cliente', texto: t, tipo: 'texto', acciones: [] }]);
+      if (conexion === 'fallida') void conectar();
+      return;
+    }
     void enviar({ texto: t }, t);
   };
   const alAccion = (b: BotonAccion) => void enviar({ accion: b.accion, etiqueta_accion: b.etiqueta }, b.etiqueta);
 
-  const nueva = async () => {
+  const nueva = () => {
     guardarConv(null);
+    setConvId(null);
     setMensajes([]);
-    await iniciar().catch(() => setError('No pudimos iniciar el chat.'));
+    void conectar();
   };
 
   const ultimoBot = [...mensajes].reverse().find((m) => m.rol !== 'cliente')?.id;
@@ -153,7 +223,8 @@ export default function PaginaChat() {
             <div>
               <h1 className="text-base font-semibold leading-tight">Don Repuestos Jaimes</h1>
               <p className="text-xs text-blue-100">
-                Repuestos Yamaha<span className="hidden sm:inline"> · {horario ?? 'Horario por confirmar'}</span>
+                Repuestos Yamaha
+                {(horario || conexion === 'lista') && <span className="hidden sm:inline"> · {horario ?? 'Horario por confirmar'}</span>}
               </p>
             </div>
           </div>
@@ -174,6 +245,7 @@ export default function PaginaChat() {
 
       <main className="flex-1 overflow-y-auto" aria-live="polite">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-4">
+          {conexion !== 'lista' && <EstadoConexion conexion={conexion} segundos={segundos} hayPendiente={hayPendiente} error={error} onReintentar={() => void conectar()} />}
           {mensajes.map((m) => (
             <Burbuja key={m.id} m={m} activo={m.id === ultimoBot && !enviando} onAccion={alAccion} />
           ))}
@@ -196,13 +268,36 @@ export default function PaginaChat() {
             placeholder="Ej.: pastillas delanteras para FZ 2.0 2018"
             className="flex-1 rounded-full border border-slate-300 px-4 py-2 text-sm focus:border-marca-600 focus:outline-none focus:ring-2 focus:ring-marca-100"
           />
-          <Boton type="submit" disabled={!texto.trim() || enviando || !convId} className="rounded-full">
+          <Boton type="submit" disabled={!texto.trim() || enviando || hayPendiente} className="rounded-full">
             Enviar
           </Boton>
         </form>
-        {error && <p className="mx-auto max-w-3xl px-4 pb-2 text-sm text-red-700">{error}</p>}
+        {error && conexion === 'lista' && <p className="mx-auto max-w-3xl px-4 pb-2 text-sm text-red-700">{error}</p>}
         <p className="mx-auto max-w-3xl px-4 pb-3 text-center text-xs text-slate-500">🔒 Nunca compartas claves ni números de tarjeta por este chat.</p>
       </footer>
+    </div>
+  );
+}
+
+function EstadoConexion({ conexion, segundos, hayPendiente, error, onReintentar }: { conexion: 'conectando' | 'fallida'; segundos: number; hayPendiente: boolean; error: string | null; onReintentar: () => void }) {
+  if (conexion === 'fallida') {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p>{error ?? 'No pudimos conectar con el asistente.'}</p>
+        <Boton tamano="sm" onClick={onReintentar}>
+          Reintentar
+        </Boton>
+      </div>
+    );
+  }
+  return (
+    <div role="status" className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+      <p className="flex items-center gap-2">
+        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-marca-600 border-t-transparent" />
+        Conectando con el asistente… {segundos > 0 && <span className="tabular-nums text-slate-500">{segundos} s</span>}
+      </p>
+      {segundos >= 5 && <p className="text-slate-500">El servidor estaba en pausa por inactividad y se está despertando. Puede tardar hasta un minuto.</p>}
+      <p className="text-slate-500">{hayPendiente ? 'Tu mensaje se enviará apenas conecte.' : 'Puedes ir escribiendo tu mensaje: lo enviamos apenas conecte.'}</p>
     </div>
   );
 }

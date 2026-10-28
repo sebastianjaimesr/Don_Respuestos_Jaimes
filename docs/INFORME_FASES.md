@@ -72,7 +72,7 @@ Entorno donde se construyó y probó: Ubuntu 24.04, Node.js 22, PostgreSQL 16.15
 
 ## Fase 7 — Pruebas
 
-`npm test` → **61 pruebas, todas pasan**, contra PostgreSQL real.
+`npm test` → **62 pruebas, todas pasan**, contra PostgreSQL real.
 
 | # | Caso del prompt | Prueba |
 |---|---|---|

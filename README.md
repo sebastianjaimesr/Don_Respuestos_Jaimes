@@ -72,15 +72,14 @@ GitHub Pages solo sirve archivos estáticos, así que ahí se publica **solo el 
 
 - El workflow [.github/workflows/github-pages.yml](.github/workflows/github-pages.yml) compila el frontend en cada cambio a `main` y lo publica en la rama `gh-pages`.
 - En el repositorio: **Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)**.
-- Mientras no haya backend, la página muestra un aviso de que el chat y el panel no responden.
-- Backend y base de datos en Render: guía paso a paso en [docs/DESPLIEGUE_RENDER.md](docs/DESPLIEGUE_RENDER.md) (usa el Blueprint [render.yaml](render.yaml)).
-- Cuando publiques el backend: crea la variable `VITE_API_URL` (Settings → Secrets and variables → Actions → Variables) con su URL, agrega `https://<usuario>.github.io` a `CORS_ORIGENES` del backend y vuelve a ejecutar el workflow.
+- La página publicada usa el backend de Render (`https://drj-backend.onrender.com`). Para apuntar a otro, crea la variable `VITE_API_URL` (Settings → Secrets and variables → Actions → Variables) y vuelve a ejecutar el workflow; el backend debe tener `https://<usuario>.github.io` en `CORS_ORIGENES`.
+- El plan gratis de Render se duerme tras unos 15 minutos sin uso: el chat muestra "Conectando…", reintenta solo y envía el mensaje del cliente apenas el servidor despierta.
 
 ## Probar
 
 ```bash
 createdb drj_test            # base SEPARADA: las pruebas la borran y recrean
-npm test                     # 61 pruebas (unitarias + integración contra PostgreSQL real)
+npm test                     # 62 pruebas (unitarias + integración contra PostgreSQL real)
 ```
 
 Las pruebas cubren los 16 casos de aceptación del prompt (búsqueda, sin resultados, compatibilidad, incompatibilidad por año, original vs. genérico, agotado, precio faltante, stock insuficiente, cotización múltiple, totales, pedido sin confirmar, pedido registrado, error de BD, atención humana, permisos y concurrencia sobre la última unidad). Mapa caso → prueba en [docs/INFORME_FASES.md](docs/INFORME_FASES.md).

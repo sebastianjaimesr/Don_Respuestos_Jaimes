@@ -24,7 +24,10 @@ export const sesion = {
 let alExpirar: (() => void) | null = null;
 export const registrarAlExpirar = (fn: () => void) => (alExpirar = fn);
 
-export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; auth?: boolean } = {}): Promise<T> {
+// El backend en un plan gratuito se "duerme" y tarda en despertar: por eso el límite es amplio.
+const ESPERA_MAXIMA_MS = 70_000;
+
+export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; auth?: boolean; esperaMs?: number } = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opciones.cuerpo !== undefined) headers['Content-Type'] = 'application/json';
   if (opciones.auth) {
@@ -32,14 +35,22 @@ export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?:
     if (t) headers.Authorization = `Bearer ${t}`;
   }
   let res: Response;
+  const control = new AbortController();
+  const limite = setTimeout(() => control.abort(), opciones.esperaMs ?? ESPERA_MAXIMA_MS);
   try {
     res = await fetch(BASE + ruta, {
       method: opciones.metodo ?? 'GET',
       headers,
       body: opciones.cuerpo !== undefined ? JSON.stringify(opciones.cuerpo) : undefined,
+      signal: control.signal,
     });
   } catch {
+    if (control.signal.aborted) {
+      throw new ErrorApi(0, 'SIN_RESPUESTA', 'El servidor no respondió a tiempo. Si estaba en pausa, espera un momento e intenta de nuevo.');
+    }
     throw new ErrorApi(0, 'SIN_CONEXION', 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.');
+  } finally {
+    clearTimeout(limite);
   }
   const datos = await res.json().catch(() => null);
   if (!res.ok || !datos?.ok) {
