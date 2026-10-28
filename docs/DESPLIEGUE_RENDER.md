@@ -32,6 +32,17 @@ Cada vez que el servicio arranca, `npm run preparar -w backend` aplica migracion
 
 Si no se creó el administrador (por ejemplo, contraseña débil), el log del servicio lo dice. Corrige `ADMIN_PASSWORD` en **Environment** y el servicio se reinicia y lo crea.
 
+### ¿No puedes entrar al panel?
+
+El administrador se crea **solo la primera vez**: cambiar `ADMIN_PASSWORD` después no cambia la clave de un usuario que ya existe. Para recuperar el acceso:
+
+1. En **Environment** pon el correo y la clave nueva en `ADMIN_EMAIL` y `ADMIN_PASSWORD` (mínimo 10 caracteres, con letras y números).
+2. Agrega la variable `ADMIN_RESTABLECER` con valor `true` y guarda. El servicio se reinicia.
+3. En **Logs** debe aparecer `✔ Acceso restablecido para ...` (o `✔ Administrador creado` si el correo no existía).
+4. Entra al panel y **vuelve a poner `ADMIN_RESTABLECER=false`** (o bórrala) para que no se repita en cada reinicio.
+
+No se pierde ningún dato: solo cambia la clave de ese usuario y lo deja como administrador activo.
+
 ## Paso 2 — Decirle a la página dónde está el backend
 
 El workflow ya usa `https://drj-backend.onrender.com` por defecto. Solo haz esto si tu servicio quedó con otra URL:
