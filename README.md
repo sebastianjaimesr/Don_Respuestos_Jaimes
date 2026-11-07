@@ -61,7 +61,8 @@ npm run dev:backend          # API en http://localhost:4000
 npm run dev:frontend         # Web en http://localhost:5173
 ```
 
-- Chat de clientes: http://localhost:5173/
+- Página de inicio con el asistente integrado: http://localhost:5173/
+- Chat a pantalla completa: http://localhost:5173/chat
 - Panel: http://localhost:5173/admin
 
 Si prefieres Docker para PostgreSQL y n8n, hay un [docker-compose.yml](docker-compose.yml) de apoyo (ver nota en ese archivo).
@@ -105,7 +106,8 @@ backend/
   src/scripts/          migrar, cargar demo, crear admin
   tests/                pruebas unitarias e integración
 frontend/
-  src/chat/             chat del cliente
+  src/inicio/           página de inicio (navbar, portada, catálogo, servicios, contacto)
+  src/chat/             asistente virtual (PanelChat) y chat a pantalla completa
   src/paginas/admin/    panel administrativo
 database/
   migrations/           SQL versionado (se aplica en orden, una sola vez)
@@ -131,7 +133,11 @@ docs/                   API, servicios externos, inventario, pendientes
 
 ## Capturas
 
-| Chat | Panel |
+| Página de inicio | Celular |
+|---|---|
+| ![Inicio](docs/capturas/inicio.png) | ![Inicio en celular](docs/capturas/inicio-movil.png) |
+
+| Asistente | Panel |
 |---|---|
 | ![Chat](docs/capturas/chat-productos.png) | ![Resumen](docs/capturas/panel-resumen.png) |
 | ![Celular](docs/capturas/chat-movil.png) | ![Pedido](docs/capturas/panel-pedido.png) |

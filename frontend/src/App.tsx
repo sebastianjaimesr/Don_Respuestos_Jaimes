@@ -1,47 +1,57 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import PaginaChat from './chat/PaginaChat';
+import PaginaInicio from './inicio/PaginaInicio';
 import { ProveedorAuth } from './api/auth';
-import { LayoutAdmin, RutaProtegida } from './paginas/admin/Layout';
-import Login from './paginas/admin/Login';
-import Resumen from './paginas/admin/Resumen';
-import Productos from './paginas/admin/Productos';
-import DetalleProducto from './paginas/admin/DetalleProducto';
-import Inventario from './paginas/admin/Inventario';
-import Cotizaciones from './paginas/admin/Cotizaciones';
-import Pedidos from './paginas/admin/Pedidos';
-import Atencion from './paginas/admin/Atencion';
-import Configuracion from './paginas/admin/Configuracion';
-import Usuarios from './paginas/admin/Usuarios';
-import Eventos from './paginas/admin/Eventos';
+
+// El panel se descarga aparte: quien visita la tienda no carga su código.
+const LayoutAdmin = lazy(() => import('./paginas/admin/Layout').then((m) => ({ default: m.LayoutAdmin })));
+const RutaProtegidaPerezosa = lazy(() => import('./paginas/admin/Layout').then((m) => ({ default: m.RutaProtegida })));
+const Login = lazy(() => import('./paginas/admin/Login'));
+const Resumen = lazy(() => import('./paginas/admin/Resumen'));
+const Productos = lazy(() => import('./paginas/admin/Productos'));
+const DetalleProducto = lazy(() => import('./paginas/admin/DetalleProducto'));
+const Inventario = lazy(() => import('./paginas/admin/Inventario'));
+const Cotizaciones = lazy(() => import('./paginas/admin/Cotizaciones'));
+const Pedidos = lazy(() => import('./paginas/admin/Pedidos'));
+const Atencion = lazy(() => import('./paginas/admin/Atencion'));
+const Configuracion = lazy(() => import('./paginas/admin/Configuracion'));
+const Usuarios = lazy(() => import('./paginas/admin/Usuarios'));
+const Eventos = lazy(() => import('./paginas/admin/Eventos'));
+
+const RutaProtegida = ({ children }: { children: ReactNode }) => <RutaProtegidaPerezosa>{children}</RutaProtegidaPerezosa>;
 
 // Se activa al publicar solo el frontend (GitHub Pages) sin un backend conectado.
 const SIN_SERVIDOR = import.meta.env.VITE_SIN_SERVIDOR === '1';
 
 const rutas = (
-  <Routes>
-    <Route path="/" element={<PaginaChat />} />
-    <Route path="/admin/login" element={<Login />} />
-    <Route
-      path="/admin"
-      element={
-        <RutaProtegida>
-          <LayoutAdmin />
-        </RutaProtegida>
-      }
-    >
-      <Route index element={<Resumen />} />
-      <Route path="productos" element={<Productos />} />
-      <Route path="productos/:id" element={<DetalleProducto />} />
-      <Route path="inventario" element={<Inventario />} />
-      <Route path="cotizaciones" element={<Cotizaciones />} />
-      <Route path="pedidos" element={<Pedidos />} />
-      <Route path="atencion" element={<Atencion />} />
-      <Route path="configuracion" element={<Configuracion />} />
-      <Route path="usuarios" element={<Usuarios />} />
-      <Route path="eventos" element={<Eventos />} />
-    </Route>
-    <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes>
+  <Suspense fallback={<div className="grid h-full place-items-center text-sm text-slate-500">Cargando…</div>}>
+    <Routes>
+      <Route path="/" element={<PaginaInicio />} />
+      <Route path="/chat" element={<PaginaChat />} />
+      <Route path="/admin/login" element={<Login />} />
+      <Route
+        path="/admin"
+        element={
+          <RutaProtegida>
+            <LayoutAdmin />
+          </RutaProtegida>
+        }
+      >
+        <Route index element={<Resumen />} />
+        <Route path="productos" element={<Productos />} />
+        <Route path="productos/:id" element={<DetalleProducto />} />
+        <Route path="inventario" element={<Inventario />} />
+        <Route path="cotizaciones" element={<Cotizaciones />} />
+        <Route path="pedidos" element={<Pedidos />} />
+        <Route path="atencion" element={<Atencion />} />
+        <Route path="configuracion" element={<Configuracion />} />
+        <Route path="usuarios" element={<Usuarios />} />
+        <Route path="eventos" element={<Eventos />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  </Suspense>
 );
 
 function AvisoSinServidor() {
