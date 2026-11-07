@@ -7,11 +7,71 @@
   --color-marca-700: #1e40af;
   --color-marca-800: #1e3a8a;
   --color-marca-900: #172554;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Identidad premium (página pública y asistente) */
+  --color-noche-950: #04060c;
+  --color-noche-900: #070b16;
+  --color-noche-800: #0c1324;
+  --color-noche-700: #131c33;
+  --color-electrico-300: #8fb6ff;
+  --color-electrico-400: #4d8dff;
+  --color-electrico-500: #2563ff;
+  --color-electrico-600: #1546f0;
+  --color-cian-400: #22d3ee;
+
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Sora Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --animate-flotar: flotar 7s ease-in-out infinite;
+  --animate-flotar-lento: flotar 9s ease-in-out infinite;
+  --animate-pulso-suave: pulso-suave 2.4s ease-in-out infinite;
+
+  @keyframes flotar {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    50% { transform: translate3d(0, -14px, 0) rotate(1.5deg); }
+  }
+  @keyframes pulso-suave {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
 }
 
 html, body, #root { height: 100%; }
+html { scroll-behavior: smooth; }
 body { @apply bg-slate-50 text-slate-900 antialiased; }
 
 /* Foco visible para navegación con teclado (accesibilidad) */
 :focus-visible { @apply outline-2 outline-offset-2 outline-marca-600; }
+
+/* Vidrio esmerilado sobre fondo oscuro */
+@utility vidrio {
+  background: linear-gradient(160deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.02));
+  border: 1px solid rgb(255 255 255 / 0.09);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+/* Texto con degradado azul eléctrico */
+@utility texto-electrico {
+  background: linear-gradient(100deg, #ffffff 10%, #a9c6ff 45%, #3d7bff 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Rejilla técnica tenue del fondo */
+@utility rejilla {
+  background-image:
+    linear-gradient(rgb(120 160 255 / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(120 160 255 / 0.07) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
+}
+
+/* Barra de desplazamiento discreta dentro del chat */
+.scroll-fino { scrollbar-width: thin; scrollbar-color: rgb(120 150 220 / 0.3) transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-flotar, .animate-flotar-lento, .animate-pulso-suave { animation: none !important; }
+}

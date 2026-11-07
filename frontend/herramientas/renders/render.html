@@ -1,0 +1,305 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const params = new URLSearchParams(location.search);
+const part = params.get('part') || 'disc';
+const S = +(params.get('size') || 1400);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(S, S);
+renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+scene.environmentIntensity = 0.9;
+
+const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 100);
+
+// Luces: clave blanca + contraluces azul eléctrico (identidad de la marca)
+const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3, 5, 6); scene.add(key);
+const fill = new THREE.DirectionalLight(0xbfd4ff, 0.6); fill.position.set(-5, 1, 4); scene.add(fill);
+const rimA = new THREE.PointLight(0x2f7bff, 60, 0, 2); rimA.position.set(-3, 2.5, -2.5); scene.add(rimA);
+const rimB = new THREE.PointLight(0x00b4ff, 40, 0, 2); rimB.position.set(3.5, -2, -2); scene.add(rimB);
+
+// ---------- texturas procedurales ----------
+function canvasTex(w, h, draw, srgb = false) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+// Mecanizado concéntrico (discos y piñones), en coordenadas UV planas de -1..1
+function concentric(rings = 900, base = 150, amp = 40) {
+  return canvasTex(2048, 2048, (g, w) => {
+    g.fillStyle = `rgb(${base},${base},${base})`; g.fillRect(0, 0, w, w);
+    for (let i = 0; i < rings; i++) {
+      const r = (i / rings) * w * 0.72;
+      const v = base + (Math.random() - 0.5) * amp;
+      g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(w / 2, w / 2, r, 0, Math.PI * 2); g.stroke();
+    }
+  });
+}
+function noiseTex(base = 128, amp = 30, size = 512) {
+  return canvasTex(size, size, (g, w, h) => {
+    const d = g.createImageData(w, h);
+    for (let i = 0; i < d.data.length; i += 4) { const v = base + (Math.random() - 0.5) * amp; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    g.putImageData(d, 0, 0);
+  });
+}
+// UV planas para geometrías extruidas en XY (radio máximo R)
+function planarUV(geo, R) {
+  const p = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / (2 * R) + 0.5, p.getY(i) / (2 * R) + 0.5);
+  uv.needsUpdate = true;
+}
+const circlePath = (r, cx = 0, cy = 0, seg = 48, Ctor = THREE.Path) => {
+  const p = new Ctor();
+  for (let i = 0; i <= seg; i++) { const a = (i / seg) * Math.PI * 2; const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; i ? p.lineTo(x, y) : p.moveTo(x, y); }
+  return p;
+};
+
+const root = new THREE.Group(); scene.add(root);
+
+// =============== DISCO DE FRENO TIPO WAVE (pétalo) ===============
+function buildDisc() {
+  const R = 1.0, petals = 13, rin = 0.62;
+  const outer = new THREE.Shape();
+  const N = 520;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const r = R - 0.045 * (0.5 - 0.5 * Math.cos(a * petals)) ** 1.6;
+    const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? outer.lineTo(x, y) : outer.moveTo(x, y);
+  }
+  outer.holes.push(circlePath(rin, 0, 0, 160));
+  // perforaciones en dos filas escalonadas
+  const nH = 26;
+  for (let i = 0; i < nH; i++) {
+    const a = (i / nH) * Math.PI * 2;
+    const rr = i % 2 ? 0.8 : 0.88;
+    outer.holes.push(circlePath(0.026, Math.cos(a) * rr, Math.sin(a) * rr, 24));
+  }
+  // ranuras de alivio curvas
+  for (let i = 0; i < 13; i++) {
+    const a0 = (i / 13) * Math.PI * 2 + 0.12;
+    const sl = new THREE.Path();
+    const pts = [];
+    for (let k = 0; k <= 12; k++) { const t = k / 12; const r = 0.7 + t * 0.06; const a = a0 + t * 0.16; pts.push([Math.cos(a) * r, Math.sin(a) * r]); }
+    const w = 0.011;
+    pts.forEach(([x, y], k) => { const n = Math.hypot(x, y); const xx = x + (x / n) * w, yy = y + (y / n) * w; k ? sl.lineTo(xx, yy) : sl.moveTo(xx, yy); });
+    pts.slice().reverse().forEach(([x, y]) => { const n = Math.hypot(x, y); sl.lineTo(x - (x / n) * w, y - (y / n) * w); });
+    outer.holes.push(sl);
+  }
+  const geo = new THREE.ExtrudeGeometry(outer, { depth: 0.05, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.006, bevelSegments: 2, curveSegments: 64 });
+  planarUV(geo, R);
+  const rough = concentric(1100, 120, 70);
+  const rotor = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ color: 0xd2d6dc, metalness: 1, roughness: 0.32, roughnessMap: rough, bumpMap: rough, bumpScale: 0.6, clearcoat: 0.15 }));
+  root.add(rotor);
+
+  // portadisco flotante de aluminio anodizado azul
+  const cR = 0.64;
+  const carrier = new THREE.Shape();
+  const arms = 6;
+  for (let i = 0; i <= 720; i++) {
+    const a = (i / 720) * Math.PI * 2;
+    const s = Math.cos(a * arms);
+    const r = 0.42 + 0.22 * Math.max(0, s) ** 3 + 0.0;
+    const x = Math.cos(a) * Math.min(r, cR), y = Math.sin(a) * Math.min(r, cR); i ? carrier.lineTo(x, y) : carrier.moveTo(x, y);
+  }
+  carrier.holes.push(circlePath(0.17, 0, 0, 96));
+  for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 + 0.3; carrier.holes.push(circlePath(0.03, Math.cos(a) * 0.25, Math.sin(a) * 0.25, 24)); }
+  for (let i = 0; i < arms; i++) {
+    const a = (i / arms) * Math.PI * 2 + Math.PI / arms;
+    carrier.holes.push(circlePath(0.075, Math.cos(a) * 0.34, Math.sin(a) * 0.34, 40));
+  }
+  const cg = new THREE.ExtrudeGeometry(carrier, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.01, bevelSegments: 3, curveSegments: 64 });
+  planarUV(cg, R);
+  const carrierMat = new THREE.MeshPhysicalMaterial({ color: 0x1650ff, metalness: 0.85, roughness: 0.28, roughnessMap: concentric(500, 150, 50), clearcoat: 0.6, clearcoatRoughness: 0.2 });
+  const cm = new THREE.Mesh(cg, carrierMat); cm.position.z = -0.01; root.add(cm);
+
+  // botones flotantes
+  const btnMat = new THREE.MeshStandardMaterial({ color: 0xe8e8ea, metalness: 1, roughness: 0.18 });
+  const btnG = new THREE.CylinderGeometry(0.038, 0.038, 0.1, 40); btnG.rotateX(Math.PI / 2);
+  const capG = new THREE.CylinderGeometry(0.03, 0.034, 0.02, 40); capG.rotateX(Math.PI / 2);
+  for (let i = 0; i < arms * 2; i++) {
+    const a = (i / (arms * 2)) * Math.PI * 2;
+    if (i % 2) continue;
+    const b = new THREE.Mesh(btnG, btnMat); b.position.set(Math.cos(a) * 0.625, Math.sin(a) * 0.625, 0.03); root.add(b);
+    const c = new THREE.Mesh(capG, btnMat); c.position.set(Math.cos(a) * 0.625, Math.sin(a) * 0.625, 0.09); root.add(c);
+  }
+  camera.position.set(0, 0, 5.9);
+  root.rotation.set(-0.5, 0.55, 0.18);
+}
+
+// =============== PIÑÓN/CORONA + CADENA ===============
+function buildSprocket() {
+  const teeth = 42, rp = 0.92; // radio primitivo
+  const rRoot = rp - 0.055, rTip = rp + 0.06;
+  const sh = new THREE.Shape();
+  const N = teeth * 24;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const ph = ((a / (Math.PI * 2)) * teeth) % 1; // 0..1 dentro de cada diente
+    // perfil: valle redondeado (rodillo) + flanco + punta
+    const d = Math.abs(ph - 0.5) * 2; // 1 en el valle, 0 en la punta
+    let r;
+    if (d > 0.55) { const t = (d - 0.55) / 0.45; r = rRoot + (1 - Math.sqrt(1 - (1 - t) ** 2)) * 0.02 + (1 - t) * 0.02; }
+    else { const t = d / 0.55; r = rTip - t * t * (rTip - rRoot - 0.04); }
+    const x = Math.cos(a) * r, y = Math.sin(a) * r; i ? sh.lineTo(x, y) : sh.moveTo(x, y);
+  }
+  sh.holes.push(circlePath(0.2, 0, 0, 96));
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; sh.holes.push(circlePath(0.028, Math.cos(a) * 0.27, Math.sin(a) * 0.27, 24)); }
+  // aligeramientos tipo gota
+  for (let i = 0; i < 6; i++) {
+    const a0 = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const p = new THREE.Path();
+    const pts = [];
+    for (let k = 0; k <= 40; k++) { const t = (k / 40) * Math.PI * 2; const rr = 0.56 + 0.17 * Math.cos(t); const aa = a0 + 0.27 * Math.sin(t) * (0.55 + 0.45 * (rr - 0.39) / 0.34); pts.push([Math.cos(aa) * rr, Math.sin(aa) * rr]); }
+    pts.forEach(([x, y], k) => (k ? p.lineTo(x, y) : p.moveTo(x, y)));
+    sh.holes.push(p);
+  }
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.06, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 3, curveSegments: 48 });
+  planarUV(geo, rTip);
+  const rough = concentric(800, 110, 60);
+  const mat = new THREE.MeshPhysicalMaterial({ color: 0x5a616d, metalness: 1, roughness: 0.34, roughnessMap: rough, bumpMap: rough, bumpScale: 0.4, clearcoat: 0.3 });
+  root.add(new THREE.Mesh(geo, mat));
+
+  // cadena sobre parte de la corona y saliendo tangente
+  const plateShape = new THREE.Shape();
+  const L = 0.0635 * 2.15, hw = 0.042;
+  // placa en forma de "8" redondeado
+  const segs = 40;
+  for (let i = 0; i <= segs; i++) { const a = -Math.PI / 2 + (i / segs) * Math.PI; i ? plateShape.lineTo(L / 2 + Math.cos(a) * hw, Math.sin(a) * hw) : plateShape.moveTo(L / 2 + Math.cos(a) * hw, Math.sin(a) * hw); }
+  plateShape.quadraticCurveTo(0, hw * 0.62, -L / 2, hw);
+  for (let i = 0; i <= segs; i++) { const a = Math.PI / 2 + (i / segs) * Math.PI; plateShape.lineTo(-L / 2 + Math.cos(a) * hw, Math.sin(a) * hw); }
+  plateShape.quadraticCurveTo(0, -hw * 0.62, L / 2, -hw);
+  const plateG = new THREE.ExtrudeGeometry(plateShape, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2 });
+  const plateOuter = new THREE.MeshPhysicalMaterial({ color: 0xc89a3c, metalness: 1, roughness: 0.25, clearcoat: 0.5 }); // cadena dorada
+  const plateInner = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 1, roughness: 0.35 });
+  const rollerG = new THREE.CylinderGeometry(0.024, 0.024, 0.08, 32); rollerG.rotateX(Math.PI / 2);
+  const pinG = new THREE.CylinderGeometry(0.014, 0.014, 0.135, 24); pinG.rotateX(Math.PI / 2);
+  const pinMat = new THREE.MeshStandardMaterial({ color: 0xdadde2, metalness: 1, roughness: 0.15 });
+  const pitchAng = (Math.PI * 2) / teeth;
+  const centers = [];
+  const startA = Math.PI * 0.05, nArc = 17;
+  for (let i = 0; i <= nArc; i++) { const a = startA + i * pitchAng; centers.push([Math.cos(a) * rp, Math.sin(a) * rp]); }
+  // tramo recto tangente desde el inicio (sentido horario)
+  const a0 = startA; const tx = Math.sin(a0), ty = -Math.cos(a0);
+  const pitch = 2 * rp * Math.sin(pitchAng / 2);
+  for (let k = 1; k <= 9; k++) centers.unshift([Math.cos(a0) * rp + tx * pitch * k, Math.sin(a0) * rp + ty * pitch * k]);
+  const zc = 0.035;
+  for (let i = 0; i < centers.length; i++) {
+    const [x, y] = centers[i];
+    const r = new THREE.Mesh(rollerG, plateInner); r.position.set(x, y, zc); root.add(r);
+    const p = new THREE.Mesh(pinG, pinMat); p.position.set(x, y, zc); root.add(p);
+    if (i < centers.length - 1) {
+      const [x2, y2] = centers[i + 1];
+      const ang = Math.atan2(y2 - y, x2 - x);
+      const mx = (x + x2) / 2, my = (y + y2) / 2;
+      const outerLink = i % 2 === 0;
+      const m = outerLink ? plateOuter : plateInner;
+      const off = outerLink ? 0.055 : 0.04;
+      for (const s of [-1, 1]) {
+        const pl = new THREE.Mesh(plateG, m);
+        pl.scale.set(Math.hypot(x2 - x, y2 - y) / L * 0.98, 1, 1);
+        pl.position.set(mx, my, zc + s * off - 0.006);
+        pl.rotation.z = ang; root.add(pl);
+      }
+    }
+  }
+  camera.position.set(0.0, 0.0, 6.7);
+  root.rotation.set(-0.45, -0.5, -0.2);
+}
+
+// =============== BUJÍA ===============
+function buildPlug() {
+  const g = new THREE.Group();
+  const lathe = (pts, mat, seg = 96) => new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), mat);
+  const ceramic = new THREE.MeshPhysicalMaterial({ color: 0xf4f2ee, roughness: 0.18, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, sheen: 0.2 });
+  const nickel = new THREE.MeshPhysicalMaterial({ color: 0xcfd3d8, metalness: 1, roughness: 0.22 });
+  const zinc = new THREE.MeshPhysicalMaterial({ color: 0xb9bcc0, metalness: 1, roughness: 0.32 });
+  // terminal superior
+  g.add(lathe([[0, 1.62], [0.05, 1.62], [0.062, 1.6], [0.062, 1.55], [0.045, 1.53], [0.045, 1.5], [0.06, 1.48], [0.06, 1.44], [0.035, 1.42], [0.035, 1.36], [0, 1.36]], nickel));
+  // aislador cerámico con nervaduras
+  const ins = [[0.035, 1.37], [0.075, 1.36]];
+  for (let k = 0; k < 5; k++) { const y = 1.33 - k * 0.075; ins.push([0.088, y], [0.092, y - 0.02], [0.088, y - 0.04], [0.08, y - 0.06]); }
+  ins.push([0.095, 0.96], [0.1, 0.9], [0.12, 0.86], [0.12, 0.82], [0.0, 0.82]);
+  g.add(lathe(ins, ceramic));
+  // casquillo engarzado
+  g.add(lathe([[0.0, 0.84], [0.12, 0.84], [0.135, 0.82], [0.135, 0.78], [0.122, 0.76], [0.13, 0.74], [0.13, 0.72], [0, 0.72]], zinc));
+  // hexágono
+  const hex = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.2, 6, 1), zinc); hex.position.y = 0.6; hex.rotation.y = Math.PI / 6; g.add(hex);
+  const ch = lathe([[0, 0.71], [0.17, 0.71], [0.18, 0.7], [0.18, 0.5], [0.17, 0.49], [0, 0.49]], zinc, 6); ch.rotation.y = Math.PI / 6; g.add(ch);
+  g.add(lathe([[0, 0.5], [0.15, 0.5], [0.155, 0.48], [0.155, 0.44], [0.0, 0.44]], zinc));
+  // arandela
+  g.add(lathe([[0.1, 0.45], [0.16, 0.45], [0.165, 0.43], [0.16, 0.42], [0.1, 0.42]], nickel));
+  // rosca
+  const th = [[0, 0.42], [0.1, 0.42]];
+  for (let k = 0; k < 16; k++) { const y = 0.41 - k * 0.022; th.push([0.112, y], [0.098, y - 0.011]); }
+  th.push([0.1, 0.05], [0.08, 0.045], [0, 0.045]);
+  g.add(lathe(th, nickel, 128));
+  // electrodo central y punta cerámica
+  g.add(lathe([[0, 0.06], [0.04, 0.06], [0.03, 0.0], [0.015, -0.03], [0, -0.03]], ceramic));
+  const ce = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.06, 20), nickel); ce.position.y = -0.05; g.add(ce);
+  // electrodo de masa en L
+  const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0.09, 0.05, 0), new THREE.Vector3(0.095, -0.06, 0), new THREE.Vector3(0.07, -0.1, 0), new THREE.Vector3(0.0, -0.105, 0)]);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.016, 12), nickel));
+  g.position.y = -0.78;
+  root.add(g);
+    camera.position.set(0, 0, 6.6);
+  root.scale.setScalar(1.45);
+  root.rotation.set(0.15, 0.4, -0.55);
+}
+
+// =============== FILTRO DE ACEITE ===============
+function buildFilter() {
+  const lathe = (pts, mat, seg = 128) => new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), mat);
+  // pintura azul metalizada con leve piel de naranja
+  const paint = new THREE.MeshPhysicalMaterial({ color: 0x0b3fd6, metalness: 0.55, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.08, bumpMap: noiseTex(128, 18, 256), bumpScale: 0.15 });
+  const steel = new THREE.MeshPhysicalMaterial({ color: 0xc4c8ce, metalness: 1, roughness: 0.28 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x111215, roughness: 0.75, metalness: 0 });
+  const body = [[0, 1.0], [0.3, 1.0], [0.42, 0.985], [0.47, 0.95], [0.485, 0.9], [0.485, 0.78], [0.475, 0.77], [0.475, 0.75], [0.485, 0.74], [0.485, 0.24], [0.475, 0.23], [0.475, 0.21], [0.485, 0.2], [0.485, 0.12], [0.49, 0.1], [0.49, 0.05], [0.47, 0.02], [0.0, 0.02]];
+  root.add(lathe(body, paint));
+  // relieve hexagonal (agarre de llave) en la tapa
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.08, 6), paint); cap.position.y = 1.03; root.add(cap);
+  // ranuras de agarre del cuerpo
+  for (let i = 0; i < 0; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.14, 10), paint);
+    rib.position.set(Math.cos(a) * 0.478, 0.8, Math.sin(a) * 0.478); root.add(rib);
+  }
+  // placa base y empaque
+  root.add(lathe([[0.0, 0.02], [0.47, 0.02], [0.47, 0.0], [0.0, 0.0]], steel));
+  root.add(lathe([[0.33, 0.0], [0.42, 0.0], [0.425, -0.03], [0.42, -0.05], [0.33, -0.05], [0.325, -0.03]], rubber));
+  // rosca central y orificios
+  root.add(lathe([[0.0, 0.0], [0.11, 0.0], [0.11, -0.04], [0.07, -0.04], [0.07, 0.0]], steel));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.005, 24), new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 1 }));
+    h.position.set(Math.cos(a) * 0.2, -0.002, Math.sin(a) * 0.2); root.add(h);
+  }
+  root.position.y = -0.5;
+  const pivot = new THREE.Group(); scene.remove(root); pivot.add(root); scene.add(pivot);
+  camera.position.set(0, 0, 6.4);
+  pivot.rotation.set(-0.5, 0.2, -0.28);
+  pivot.scale.setScalar(1.45);
+}
+
+({ disc: buildDisc, sprocket: buildSprocket, plug: buildPlug, filter: buildFilter })[part]();
+camera.lookAt(0, 0, 0);
+renderer.render(scene, camera);
+window.__listo = renderer.domElement.toDataURL('image/png');
+</script></body></html>
