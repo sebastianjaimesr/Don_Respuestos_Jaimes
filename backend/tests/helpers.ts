@@ -23,6 +23,10 @@ export async function reiniciarDatos() {
   await pool.query(`TRUNCATE ${rows.map((r) => `"${r.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
   await pool.query(`ALTER SEQUENCE seq_codigo_pedido RESTART WITH 1; ALTER SEQUENCE seq_codigo_cotizacion RESTART WITH 1;`);
   await pool.query(CONFIG);
+  // Claves de configuración que agregan migraciones posteriores a la 002
+  await pool.query(
+    `INSERT INTO configuracion_negocio (clave, valor, descripcion, confirmado) VALUES ('whatsapp_ventas', NULL, 'Número de WhatsApp de ventas', false) ON CONFLICT (clave) DO NOTHING`,
+  );
   await pool.query(SEED);
 }
 

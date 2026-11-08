@@ -1,56 +1,110 @@
 import type { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import { config } from '../config';
 import { AppError } from '../errores';
 import { pool } from '../db';
+import { leerSesion } from './sesion';
 
-export type Rol = 'admin' | 'vendedor' | 'consulta';
+/** Roles de sistema. Se pueden crear otros en la tabla `roles`. */
+export type Rol = 'admin' | 'vendedor' | 'consulta' | (string & {});
+
+export type Permiso =
+  | 'catalogo.ver'
+  | 'inventario.ver'
+  | 'ventas.ver'
+  | 'productos.editar'
+  | 'compatibilidades.editar'
+  | 'imagenes.editar'
+  | 'precios.editar'
+  | 'precios.masivo'
+  | 'inventario.mover'
+  | 'compras.gestionar'
+  | 'importaciones.aplicar'
+  | 'exportaciones.descargar'
+  | 'pedidos.gestionar'
+  | 'atencion.gestionar'
+  | 'configuracion.editar'
+  | 'usuarios.gestionar'
+  | 'auditoria.ver';
 
 export interface UsuarioToken {
   id: number;
   nombre: string;
   rol: Rol;
+  permisos: Permiso[];
+}
+
+export interface ClienteSesion {
+  id: number;
+  nombre: string;
+  email: string;
+  telefono: string;
 }
 
 declare module 'express-serve-static-core' {
   interface Request {
     usuario?: UsuarioToken;
+    cliente?: ClienteSesion;
     rawBody?: Buffer;
   }
 }
 
-/** Verifica el token JWT del encabezado Authorization: Bearer <token>. */
+/** Sesión de asesor (panel): token Bearer o cookie `drj_panel`. */
 export function requerirAuth(req: Request, _res: Response, next: NextFunction) {
-  const h = req.headers.authorization ?? '';
-  const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-  if (!token) return next(new AppError(401, 'NO_AUTENTICADO', 'Debes iniciar sesión'));
-  let id: number;
+  let s;
   try {
-    const p = jwt.verify(token, config.JWT_SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
-    id = Number(p.sub);
-  } catch {
-    return next(new AppError(401, 'SESION_INVALIDA', 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.'));
+    s = leerSesion(req, 'panel');
+  } catch (e) {
+    return next(e);
   }
-  // Se consulta el usuario en cada solicitud: si lo desactivan o le cambian el rol,
-  // el cambio aplica de inmediato (no hay que esperar a que venza el token).
+  if (!s) return next(new AppError(401, 'NO_AUTENTICADO', 'Debes iniciar sesión'));
+  // Se consulta el usuario y sus permisos en cada solicitud: si lo desactivan o le
+  // cambian el rol, el cambio aplica de inmediato (no hay que esperar a que venza el token).
   pool
-    .query('SELECT id, nombre, rol FROM asesores WHERE id = $1 AND activo', [id])
+    .query(
+      `SELECT a.id, a.nombre, a.rol, COALESCE(array_agg(rp.permiso) FILTER (WHERE rp.permiso IS NOT NULL), '{}') AS permisos
+       FROM asesores a LEFT JOIN rol_permisos rp ON rp.rol = a.rol
+       WHERE a.id = $1 AND a.activo GROUP BY a.id`,
+      [s.id],
+    )
     .then(({ rows }) => {
       if (!rows[0]) return next(new AppError(401, 'SESION_INVALIDA', 'Tu usuario no está activo. Inicia sesión de nuevo.'));
-      req.usuario = { id: rows[0].id, nombre: rows[0].nombre, rol: rows[0].rol };
+      req.usuario = { id: rows[0].id, nombre: rows[0].nombre, rol: rows[0].rol, permisos: rows[0].permisos };
       next();
     })
     .catch(next);
 }
 
 /**
- * Autorización por roles, verificada en el SERVIDOR.
+ * Autorización por permisos, verificada en el SERVIDOR.
  * Ocultar un botón en la interfaz no es seguridad: esto sí.
  */
-export function requerirRol(...roles: Rol[]) {
+export function requerirPermiso(...permisos: Permiso[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.usuario) return next(new AppError(401, 'NO_AUTENTICADO', 'Debes iniciar sesión'));
-    if (!roles.includes(req.usuario.rol)) return next(new AppError(403, 'SIN_PERMISOS', 'No tienes permisos para esta acción'));
+    if (!permisos.every((p) => req.usuario!.permisos.includes(p))) return next(new AppError(403, 'SIN_PERMISOS', 'No tienes permisos para esta acción'));
     next();
+  };
+}
+
+export const tienePermiso = (req: Request, p: Permiso) => Boolean(req.usuario?.permisos.includes(p));
+
+/** Sesión de cliente de la tienda (cookie `drj_cliente`). Si `obligatoria` es false, solo la lee. */
+export function sesionCliente(obligatoria: boolean) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    let s;
+    try {
+      s = leerSesion(req, 'tienda');
+    } catch (e) {
+      // Sesión vencida en una ruta opcional → se sigue como visitante; un CSRF inválido siempre se rechaza.
+      return obligatoria || (e as AppError).codigo === 'CSRF_INVALIDO' ? next(e) : next();
+    }
+    if (!s) return obligatoria ? next(new AppError(401, 'NO_AUTENTICADO', 'Inicia sesión en tu cuenta')) : next();
+    pool
+      .query('SELECT id, nombre, email, telefono FROM clientes WHERE id = $1 AND password_hash IS NOT NULL', [s.id])
+      .then(({ rows }) => {
+        if (!rows[0]) return obligatoria ? next(new AppError(401, 'SESION_INVALIDA', 'Tu cuenta no está disponible. Inicia sesión de nuevo.')) : next();
+        req.cliente = rows[0];
+        next();
+      })
+      .catch(next);
   };
 }
