@@ -35,6 +35,16 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      # Fotos de productos en Supabase Storage (docs/CONFIGURACION_SERVICIOS.md § 6).
+      # Mientras no las llenes, el panel avisa que las imágenes no están configuradas.
+      - key: ALMACENAMIENTO
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: productos
 
 databases:
   - name: drj-db

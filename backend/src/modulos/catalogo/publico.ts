@@ -31,7 +31,7 @@ export type FiltrosCatalogo = z.infer<typeof esquemaFiltros>;
 
 // Columnas comunes de una tarjeta de producto
 const TARJETA = `
-  p.id, p.slug, p.sku, p.referencia, p.nombre, p.tipo, p.precio, p.destacado, p.es_demo, p.posicion,
+  p.id, p.slug, p.sku, p.referencia, p.nombre, p.tipo, vp.precio, vp.precio_lista, vp.promocion, vp.promocion_termina_at, p.destacado, p.es_demo, p.posicion,
   cat.slug AS categoria, cat.nombre AS categoria_nombre, ma.nombre AS marca,
   e.estado AS disponibilidad,
   (SELECT url FROM producto_imagenes im WHERE im.producto_id = p.id ORDER BY im.es_principal DESC, im.orden, im.id LIMIT 1) AS imagen`;
@@ -39,7 +39,8 @@ const DESDE = `
   FROM productos p
   JOIN categorias cat ON cat.id = p.categoria_id
   JOIN marcas_repuesto ma ON ma.id = p.marca_id
-  JOIN v_estado_inventario e ON e.producto_id = p.id`;
+  JOIN v_estado_inventario e ON e.producto_id = p.id
+  JOIN v_precio_vigente vp ON vp.producto_id = p.id`;
 
 const aTarjeta = (f: Record<string, any>) => ({
   id: f.id,
@@ -53,6 +54,9 @@ const aTarjeta = (f: Record<string, any>) => ({
   posicion: f.posicion,
   precio: f.precio as string | null,
   precio_confirmado: f.precio !== null,
+  promocion: f.promocion
+    ? { nombre: f.promocion as string, precio_antes: f.precio_lista as string, termina_at: new Date(f.promocion_termina_at).toISOString() }
+    : null,
   disponibilidad: f.disponibilidad as 'disponible' | 'stock_bajo' | 'agotado' | 'sin_registro',
   imagen: f.imagen as string | null,
   destacado: f.destacado,
@@ -96,8 +100,8 @@ export async function listarProductos(f: FiltrosCatalogo) {
   }
   if (f.marca) where.push(`p.marca_id = ${pr.add(f.marca)}`);
   if (f.tipo) where.push(`p.tipo = ${pr.add(f.tipo)}`);
-  if (f.precio_min !== undefined) where.push(`p.precio >= ${pr.add(f.precio_min)}`);
-  if (f.precio_max !== undefined) where.push(`p.precio <= ${pr.add(f.precio_max)}`);
+  if (f.precio_min !== undefined) where.push(`vp.precio >= ${pr.add(f.precio_min)}`);
+  if (f.precio_max !== undefined) where.push(`vp.precio <= ${pr.add(f.precio_max)}`);
   if (f.disponible === 'true') where.push(`e.estado IN ('disponible', 'stock_bajo')`);
   if (f.destacado === 'true') where.push('p.destacado');
 
@@ -116,9 +120,9 @@ export async function listarProductos(f: FiltrosCatalogo) {
   }
 
   const orden = {
-    relevancia: f.q ? `${relevancia} DESC, p.destacado DESC, p.nombre` : 'p.destacado DESC, (p.precio IS NULL), p.nombre, p.id',
-    precio_asc: 'p.precio ASC NULLS LAST, p.nombre',
-    precio_desc: 'p.precio DESC NULLS LAST, p.nombre',
+    relevancia: f.q ? `${relevancia} DESC, p.destacado DESC, p.nombre` : 'p.destacado DESC, (vp.precio IS NULL), p.nombre, p.id',
+    precio_asc: 'vp.precio ASC NULLS LAST, p.nombre',
+    precio_desc: 'vp.precio DESC NULLS LAST, p.nombre',
     nombre: 'p.nombre, p.id',
     recientes: 'p.created_at DESC, p.id DESC',
   }[f.orden];
@@ -177,14 +181,14 @@ export async function relacionados(slug: string) {
          SELECT 1 FROM compatibilidades a JOIN compatibilidades b ON b.modelo_id = a.modelo_id
          WHERE a.producto_id = $1 AND a.verificada AND b.producto_id = p.id AND b.verificada
            AND a.anio_desde <= b.anio_hasta AND b.anio_desde <= a.anio_hasta))
-     ORDER BY (p.categoria_id = $2) DESC, (p.precio IS NULL), p.destacado DESC, p.nombre LIMIT 8`,
+     ORDER BY (p.categoria_id = $2) DESC, (vp.precio IS NULL), p.destacado DESC, p.nombre LIMIT 8`,
     [id, categoria_id],
   );
   return rows.map(aTarjeta);
 }
 
 export async function destacados() {
-  const { rows } = await pool.query(`SELECT ${TARJETA} ${DESDE} WHERE p.activo AND p.destacado AND p.precio IS NOT NULL ORDER BY p.nombre LIMIT 12`);
+  const { rows } = await pool.query(`SELECT ${TARJETA} ${DESDE} WHERE p.activo AND p.destacado AND vp.precio IS NOT NULL ORDER BY p.nombre LIMIT 12`);
   return rows.map(aTarjeta);
 }
 

@@ -7,6 +7,7 @@ import { rutasPublicas } from './rutas/publicas';
 import { rutasIntegraciones } from './rutas/integraciones';
 import { rutasAdmin } from './rutas/admin';
 import { rutasTienda } from './rutas/tienda';
+import { rutasAlmacenLocal } from './rutas/almacenLocal';
 import { pool } from './db';
 
 export function crearApp() {
@@ -41,6 +42,7 @@ export function crearApp() {
     }
   });
 
+  app.use('/api/almacen-local', rutasAlmacenLocal);
   app.use('/api', rutasPublicas);
   app.use('/api', rutasTienda);
   app.use('/api', rutasIntegraciones);

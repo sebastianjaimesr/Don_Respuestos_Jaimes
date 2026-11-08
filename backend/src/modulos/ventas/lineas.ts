@@ -56,8 +56,10 @@ export async function calcularLineas(
   const ids = items.map((i) => i.producto_id).sort((a, b) => a - b);
   // ORDER BY id + FOR UPDATE: bloqueo en orden fijo para evitar interbloqueos (deadlocks)
   const { rows } = await db.query(
-    `SELECT p.id, p.sku AS referencia, p.nombre, p.tipo, p.precio, p.activo, p.es_demo, i.cantidad AS stock
+    `SELECT p.id, p.sku AS referencia, p.nombre, p.tipo, vp.precio, p.activo, p.es_demo, i.cantidad AS stock
      FROM productos p JOIN inventario i ON i.producto_id = p.id
+     -- Precio vigente: incluye la promoción activa (la misma que ve el cliente)
+     JOIN v_precio_vigente vp ON vp.producto_id = p.id
      WHERE p.id = ANY($1::int[])
      ORDER BY p.id
      ${opciones.bloquear ? 'FOR UPDATE OF i' : ''}`,

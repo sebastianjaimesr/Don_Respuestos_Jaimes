@@ -8,3 +8,4 @@ coverage/
 .DS_Store
 frontend/herramientas/renders/node_modules/
 frontend/herramientas/renders/out-*.png
+backend/uploads/

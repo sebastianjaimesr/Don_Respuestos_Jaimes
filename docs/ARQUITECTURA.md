@@ -235,7 +235,7 @@ Convenciones actuales que se mantienen: prefijo `/api`, respuesta `{ ok: true, d
 
 ### 4.3 Panel (cookie de sesión de asesor + permiso)
 
-> **Estado (fase 4B):** ya funcionan todas las áreas de esta tabla **excepto** imágenes, importación, exportación, promociones y tarifas de envío del panel, que quedan para la fase 4C (necesitan Supabase Storage y la librería de hojas de cálculo).
+> **Estado (fase 4C):** todas las áreas de esta tabla funcionan. Las imágenes necesitan las credenciales de Supabase (o `ALMACENAMIENTO=local` en desarrollo). Las tarifas de envío ya se administran, pero el checkout sigue usando `costo_envio` de la configuración hasta la fase 7.
 
 Cada ruta exige un permiso (§ 5.2). Las escrituras quedan en `auditoria`.
 
@@ -537,6 +537,7 @@ Cada módulo expone servicios con SQL; las rutas solo validan, llaman al servici
 | `009_importaciones.sql` | Importaciones y errores |
 | `010_busqueda.sql` | `pg_trgm`, `f_normalizar`, `busqueda tsvector`, índices |
 | `011_tienda.sql` | `clientes.cuenta_creada_at` (el historial de la cuenta solo muestra pedidos hechos desde que se abrió, porque el teléfono no se verifica por SMS), clave `whatsapp_ventas` sin confirmar, reindexación de la búsqueda al cambiar nombre o sinónimos de una categoría o marca, `fuzzystrmatch` + `f_coincide_aprox` para errores de digitación ("bugia" → bujía) |
+| `012_promociones_vigentes.sql` | Vista `v_precio_vigente`: el precio que se cobra (con la mejor promoción vigente, sin sumar descuentos, nunca ≤ 0 ni para productos sin precio). La usan catálogo, carrito, asistente y pedido |
 
 Las columnas viejas (`productos.categoria`, `modelos_motocicleta.fabricante`, `marcas.tipo`) se rellenan en sus reemplazos y se quitan en la misma migración 003, porque en el mismo pull request todo el código se adaptó. Las migraciones se prueban de dos formas: sobre una base vacía y sobre una base con el esquema 001–002 y los datos demo anteriores (como está hoy en Render).
 

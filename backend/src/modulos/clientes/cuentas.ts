@@ -90,8 +90,9 @@ export async function pedidoDelCliente(clienteId: number, codigo: string) {
 
 export async function listarFavoritos(clienteId: number) {
   const { rows } = await pool.query(
-    `SELECT p.id AS producto_id, p.slug, p.sku, p.nombre, p.precio, p.tipo, e.estado AS disponibilidad, f.created_at
+    `SELECT p.id AS producto_id, p.slug, p.sku, p.nombre, vp.precio, vp.precio_lista, vp.promocion, p.tipo, e.estado AS disponibilidad, f.created_at
      FROM favoritos f JOIN productos p ON p.id = f.producto_id JOIN v_estado_inventario e ON e.producto_id = p.id
+     JOIN v_precio_vigente vp ON vp.producto_id = p.id
      WHERE f.cliente_id = $1 AND p.activo ORDER BY f.created_at DESC`,
     [clienteId],
   );

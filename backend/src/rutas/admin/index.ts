@@ -17,6 +17,9 @@ import { r as compras } from './compras';
 import { r as ventas } from './ventas';
 import { r as atencion } from './atencion';
 import { r as sistema } from './sistema';
+import { r as comercial } from './comercial';
+import { r as datos } from './datos';
+import { r as imagenes } from './imagenes';
 
 /**
  * Rutas del panel. Cada ruta exige un PERMISO (tabla rol_permisos), no un rol
@@ -75,4 +78,4 @@ rutasAdmin.use('/admin', admin);
 
 // Los sub-routers no usan `r.use(...)`: un middleware a nivel de router correría
 // para TODAS las rutas del panel. Cada ruta declara su permiso.
-for (const area of [metricas, catalogo, productos, inventario, compras, ventas, atencion, sistema]) admin.use(area);
+for (const area of [metricas, catalogo, productos, imagenes, inventario, compras, ventas, comercial, datos, atencion, sistema]) admin.use(area);

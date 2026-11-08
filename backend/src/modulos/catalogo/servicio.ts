@@ -14,8 +14,10 @@ export interface ResultadoProducto {
   posicion: 'delantero' | 'trasero' | null;
   tipo: TipoProducto;
   marca: string;
-  precio: string | null; // NUMERIC como texto; null = precio NO confirmado
+  precio: string | null; // NUMERIC como texto; null = precio NO confirmado. Ya incluye la promoción vigente.
   precio_confirmado: boolean;
+  /** Si hay promoción vigente: precio sin descuento y nombre de la promoción. */
+  promocion: { nombre: string; precio_antes: string; termina_at: string } | null;
   disponibilidad: {
     cantidad: number | null;
     estado: 'disponible' | 'stock_bajo' | 'agotado' | 'sin_registro';
@@ -65,12 +67,13 @@ export async function listarModelos(db: Consultor = pool): Promise<ModeloCatalog
 
 const SELECT_PRODUCTO = `
   SELECT p.id AS producto_id, p.sku AS referencia, p.nombre, cat.slug AS categoria, p.posicion, p.tipo, ma.nombre AS marca,
-         p.precio, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias,
+         vp.precio, vp.precio_lista, vp.promocion, vp.promocion_termina_at, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias,
          mo.nombre AS modelo, c.anio_desde, c.anio_hasta, c.verificada, c.fuente, c.notas
   FROM productos p
   JOIN categorias cat ON cat.id = p.categoria_id
   JOIN marcas_repuesto ma ON ma.id = p.marca_id
   JOIN v_estado_inventario e ON e.producto_id = p.id
+  JOIN v_precio_vigente vp ON vp.producto_id = p.id
   JOIN compatibilidades c ON c.producto_id = p.id
   JOIN modelos_motocicleta mo ON mo.id = c.modelo_id`;
 
@@ -87,6 +90,7 @@ function aResultado(f: FilaProducto): ResultadoProducto {
     marca: f.marca,
     precio: f.precio,
     precio_confirmado: f.precio !== null,
+    promocion: f.promocion ? { nombre: f.promocion, precio_antes: f.precio_lista, termina_at: new Date(f.promocion_termina_at).toISOString() } : null,
     disponibilidad: { cantidad: f.cantidad, estado: f.estado, tiempo_abastecimiento_dias: f.tiempo_abastecimiento_dias },
     compatibilidad: {
       modelo: f.modelo,
@@ -150,7 +154,7 @@ export async function buscarRepuesto(entrada: {
      WHERE p.activo AND c.modelo_id = $1 AND cat.slug = $2
        AND ($3::text IS NULL OR p.posicion = $3)
        AND ($4::text IS NULL OR (p.tipo = 'original') = ($4 = 'original'))
-     ORDER BY (p.tipo = 'original') DESC, p.precio NULLS LAST, p.id`,
+     ORDER BY (p.tipo = 'original') DESC, vp.precio NULLS LAST, p.id`,
     [modelo.id, cat.clave, requierePos ? entrada.posicion ?? null : null, entrada.tipo ?? null],
   );
 
@@ -168,10 +172,10 @@ export async function buscarRepuesto(entrada: {
 /** Producto por id con su inventario (para carrito, cotización y pedido). */
 export async function obtenerProductoVenta(productoId: number, db: Consultor = pool) {
   const { rows } = await db.query(
-    `SELECT p.id, p.sku AS referencia, p.nombre, cat.slug AS categoria, p.posicion, p.tipo, p.precio, p.activo, p.es_demo, ma.nombre AS marca,
+    `SELECT p.id, p.sku AS referencia, p.nombre, cat.slug AS categoria, p.posicion, p.tipo, vp.precio, vp.precio_lista, vp.promocion, p.activo, p.es_demo, ma.nombre AS marca,
             e.cantidad, e.estado, e.tiempo_abastecimiento_dias
      FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN marcas_repuesto ma ON ma.id = p.marca_id
-     JOIN v_estado_inventario e ON e.producto_id = p.id
+     JOIN v_estado_inventario e ON e.producto_id = p.id JOIN v_precio_vigente vp ON vp.producto_id = p.id
      WHERE p.id = $1`,
     [productoId],
   );
@@ -204,8 +208,8 @@ export async function compatiblesConModelo(modeloId: number, anio: number) {
 
 export async function disponibilidadPorReferencia(referencia: string) {
   const { rows } = await pool.query(
-    `SELECT p.sku AS referencia, p.nombre, p.tipo, p.precio, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias
-     FROM productos p JOIN v_estado_inventario e ON e.producto_id = p.id
+    `SELECT p.sku AS referencia, p.nombre, p.tipo, vp.precio, vp.precio_lista, vp.promocion, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias
+     FROM productos p JOIN v_estado_inventario e ON e.producto_id = p.id JOIN v_precio_vigente vp ON vp.producto_id = p.id
      WHERE ${COINCIDE_REFERENCIA} AND p.activo`,
     [referencia],
   );

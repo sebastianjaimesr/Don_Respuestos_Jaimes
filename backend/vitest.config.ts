@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 // Las pruebas de integración usan una base PostgreSQL REAL y separada (drj_test).
@@ -14,6 +16,8 @@ export default defineConfig({
       N8N_NOTIFICACION_URL: 'http://127.0.0.1:4599/notificar',
       RATE_LIMIT_CHAT_POR_MINUTO: '10000',
       RATE_LIMIT_LOGIN_POR_15MIN: '10000',
+      ALMACENAMIENTO: 'local',
+      ALMACENAMIENTO_LOCAL_DIR: path.join(os.tmpdir(), 'drj-imagenes-prueba'),
     },
     globalSetup: './tests/globalSetup.ts',
     fileParallelism: false,
