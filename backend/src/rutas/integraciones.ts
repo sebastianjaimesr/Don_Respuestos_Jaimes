@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Request, type Response } from 'express'
 import { z } from 'zod';
 import { h, ok } from '../utils/http';
 import { requerirFirma } from '../middleware/firmaWebhook';
-import { requerirAuth, requerirRol } from '../middleware/auth';
+import { requerirAuth, requerirPermiso } from '../middleware/auth';
 import { esquemaMensajeEntrante } from '../asistente/esquemas';
 import { atenderMensaje } from '../modulos/conversaciones/atencion';
 import { obtenerOCrear } from '../modulos/conversaciones/servicio';
@@ -20,7 +20,7 @@ export const rutasIntegraciones = Router();
  */
 function firmaOStaff(req: Request, res: Response, next: NextFunction) {
   if (req.headers.authorization) {
-    return requerirAuth(req, res, (err?: unknown) => (err ? next(err) : requerirRol('admin', 'vendedor')(req, res, next)));
+    return requerirAuth(req, res, (err?: unknown) => (err ? next(err) : requerirPermiso('pedidos.gestionar')(req, res, next)));
   }
   return requerirFirma(req, res, next);
 }

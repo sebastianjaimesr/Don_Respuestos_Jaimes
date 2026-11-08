@@ -9,6 +9,7 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - [ ] Cargar compatibilidades **verificadas** con su fuente (catálogo de partes Yamaha o proveedor). Sin esto el asistente no muestra el producto.
 - [ ] Conteo físico inicial y carga de existencias (movimientos de entrada).
 - [ ] Confirmar en Panel → Configuración: dirección, ciudades de envío, transportadoras, costo de envío, contacto humano, vigencia de cotizaciones, medios de pago.
+- [ ] Confirmar en Panel → Configuración el número de **WhatsApp de ventas** (`whatsapp_ventas`, solo dígitos con 57). Mientras no esté confirmado, el checkout de la tienda registra el pedido pero no muestra el botón de WhatsApp.
 - [ ] Revisar con el propietario los textos del asistente (saludo, despedida, advertencia de seguridad).
 
 ## 2. Legal y datos personales (Colombia)

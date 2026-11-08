@@ -30,7 +30,7 @@ Todas las respuestas tienen la misma forma:
 
 ## Autenticación
 
-- **Panel:** `POST /auth/login` → `token`. Enviar `Authorization: Bearer <token>`. El rol se vuelve a consultar en cada solicitud (si desactivas un usuario, pierde acceso de inmediato).
+- **Panel:** `POST /auth/login` → cookie `drj_panel` + `csrf` (y `token` para `Authorization: Bearer`, ver § Panel). El rol se vuelve a consultar en cada solicitud (si desactivas un usuario, pierde acceso de inmediato).
 - **Integraciones (n8n):** encabezados
   - `X-DRJ-Timestamp`: segundos Unix
   - `X-DRJ-Firma`: `hex(HMAC_SHA256(WEBHOOK_SECRET, timestamp + "." + cuerpo_crudo))`
@@ -150,38 +150,63 @@ Webhooks que el **backend llama** (salientes, también firmados):
 | `N8N_NOTIFICACION_URL` | escalamiento creado | `{ evento: "escalamiento_creado", transferencia_id, motivo, detalle, conversacion_id, creado }` |
 | `N8N_SALIENTE_URL` | asesor responde a cliente de WhatsApp/Telegram | `{ canal, canal_usuario_id, texto }` |
 
-## Panel administrativo (`Authorization: Bearer`)
+## Tienda en línea (pública y cuenta de cliente)
 
-Roles: **admin** (todo), **vendedor** (inventario, pedidos, cotizaciones, atención), **consulta** (solo lectura).
+Precios, stock y totales se calculan **siempre en el servidor**; el navegador solo guarda el `id` del carrito.
 
-| Método | Ruta | Rol | Descripción |
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/catalogo/productos?q&categoria&fabricante&modelo&version&anio&cilindraje&marca&tipo&precio_min&precio_max&disponible&orden&pagina&tamano` | Listado. `q` busca por SKU, referencia, código de barras, texto sin tildes y con errores de digitación. `modelo`/`anio` solo cuentan compatibilidades **verificadas**. Una categoría grupo incluye sus categorías |
+| GET | `/catalogo/productos/:slug` · `/catalogo/productos/:slug/relacionados` | Detalle (especificaciones, compatibilidades, disponibilidad) |
+| GET | `/catalogo/destacados` · `/catalogo/sugerencias?q` · `/catalogo/categorias` | Portada, autocompletar y árbol de categorías |
+| GET | `/catalogo/fabricantes` · `/catalogo/fabricantes/:id/modelos` · `/catalogo/modelos/:id/versiones` | Selector "¿qué moto tienes?" |
+| GET | `/envios/tarifas` | Costos de envío confirmados |
+| POST | `/carritos` | Carrito nuevo → `{ id }` |
+| GET | `/carritos/:id` | Líneas con precio y stock recalculados; cada línea trae `problema` (`agotado`, `stock_insuficiente`, `precio_no_confirmado`, `inactivo`) y el carrito `listo_para_pedido` |
+| PUT / DELETE | `/carritos/:id/items/:productoId` | `{ cantidad }`. Errores: `AGOTADO`, `STOCK_INSUFICIENTE`, `PRECIO_NO_CONFIRMADO`, `CARRITO_CERRADO` |
+| POST | `/carritos/:id/checkout` | `{ cliente, entrega, metodo_pago, confirmado_por_cliente: true }` → `{ pedido, whatsapp }`. 201 al crear, 200 si se repite (idempotente por carrito). `whatsapp` es `null` hasta que el dueño confirme `whatsapp_ventas`. **No marca ningún pago** |
+| POST | `/clientes/registro` · `/clientes/sesion` | Cuenta con correo y contraseña → cookie `drj_cliente` + `csrf` |
+| DELETE | `/clientes/sesion` | Cerrar sesión |
+| GET | `/clientes/yo` | Perfil + `csrf` |
+| GET | `/clientes/yo/pedidos[/:codigo]` | Pedidos hechos **desde que se abrió la cuenta** |
+| GET · PUT / DELETE | `/clientes/yo/favoritos` · `/clientes/yo/favoritos/:productoId` | Favoritos |
+| POST | `/clientes/yo/carrito/fusionar` | `{ carrito_id }`: une el carrito anónimo con el de la cuenta |
+
+Escrituras con cookie: enviar `X-CSRF-Token: <csrf>` y `credentials: 'include'`.
+
+## Panel administrativo
+
+**Sesión:** `POST /auth/login` deja la cookie `drj_panel` (HttpOnly) y devuelve `{ token, usuario, csrf }`. Con la cookie, toda escritura lleva `X-CSRF-Token`; con `Authorization: Bearer <token>` no hace falta. `POST /auth/logout`, `GET /auth/yo`, `PUT /auth/password { actual, nueva }`.
+
+**Permisos:** cada ruta exige un permiso de la tabla `rol_permisos`, que se vuelve a leer en cada solicitud. Roles base: **admin** (todo), **vendedor** (`catalogo.ver`, `inventario.ver`, `ventas.ver`, `inventario.mover`, `compras.gestionar`, `pedidos.gestionar`, `atencion.gestionar`), **consulta** (los tres `.ver`). Se pueden crear roles nuevos.
+
+| Método | Ruta | Permiso | Descripción |
 |---|---|---|---|
-| POST | `/auth/login` | — | `{ email, password }` → `{ token, usuario }` (10 intentos / 15 min) |
-| GET | `/auth/yo` | todos | Usuario actual |
-| GET | `/admin/metricas` | todos | Ventas, inventario, atención, top productos, ventas por día |
-| GET | `/admin/productos?q&categoria&tipo&estado_stock&activo&pagina&tamano` | todos | Lista paginada |
-| GET | `/admin/productos/:id` | todos | Detalle + compatibilidades |
-| POST | `/admin/productos` | admin | Crear (stock inicial 0; tipo según la marca) |
-| PUT | `/admin/productos/:id` | admin | Editar (cambio de precio queda en eventos) |
-| POST | `/admin/productos/:id/compatibilidades` | admin | `{ modelo_id, anio_desde, anio_hasta, verificada, fuente, notas }` (verificada exige fuente) |
-| PUT / DELETE | `/admin/compatibilidades/:id` | admin | |
-| GET / POST | `/admin/marcas` | todos / admin | `{ nombre, tipo: original\|generico }` |
-| GET / POST / PUT | `/admin/modelos[/:id]` | todos / admin | `{ fabricante_id, nombre, cilindraje_cc, anio_inicio, anio_fin, alias[] }` |
-| GET | `/admin/fabricantes` | todos | Fabricantes de motos |
-| GET | `/admin/categorias` | todos | |
-| GET | `/admin/inventario/alertas` | todos | Agotados y stock bajo |
-| POST | `/admin/inventario/:productoId/movimientos` | admin, vendedor | `{ tipo: entrada\|salida, cantidad, motivo }` o `{ tipo: ajuste, cantidad_nueva, motivo }` |
-| GET | `/admin/inventario/:productoId/movimientos` | todos | Bitácora |
-| GET | `/admin/cotizaciones[/:codigo]` | todos | |
-| PATCH | `/admin/cotizaciones/:codigo` | admin, vendedor | `{ estado: anulada\|vencida }` |
-| GET | `/admin/pedidos?estado&q[/:codigo]` | todos | |
-| PATCH | `/admin/pedidos/:codigo` | admin, vendedor | `{ estado?, estado_pago? }`. Cancelar devuelve stock |
-| GET | `/admin/transferencias?estado` | todos | Solicitudes de atención humana |
-| PATCH | `/admin/transferencias/:id` | admin, vendedor | `{ estado: pendiente\|en_atencion\|resuelta }` |
-| GET / POST | `/admin/transferencias/:id/mensajes` | todos / admin, vendedor | Ver conversación / responder `{ texto }` |
-| GET | `/admin/configuracion` | todos | |
-| PUT | `/admin/configuracion/:clave` | admin | `{ valor, confirmado }` |
-| GET | `/admin/eventos?nivel` | admin | Registro de eventos |
-| GET / POST / PATCH | `/admin/asesores[/:id]` | admin | Usuarios del panel |
+| GET | `/admin/metricas` | `ventas.ver` | Ventas del día y del mes (hora de Bogotá), inventario a costo y a venta, agotados, stock bajo, más vendidos, inventario por categoría |
+| GET | `/admin/productos?q&categoria&tipo&estado_stock&activo&pagina&tamano` · `/admin/productos/:id` | `catalogo.ver` | Lista y detalle |
+| POST / PUT | `/admin/productos[/:id]` | `productos.editar` (+ `precios.editar` si cambia el precio de venta o de compra) | Incluye `referencia_fabricante`, `codigo_barras`, `precio_compra`, `especificaciones`, `destacado`, `proveedor_id` |
+| PATCH | `/admin/productos/:id/estado` | `productos.editar` | `{ activo?, destacado? }` |
+| DELETE | `/admin/productos/:id` | `productos.editar` | Solo si nunca tuvo movimientos, ventas, cotizaciones ni compras; si no → 409 `PRODUCTO_CON_HISTORIAL` (desactívalo) |
+| GET | `/admin/productos/:id/precios` | `catalogo.ver` | Historial de precios con origen (`manual`, `compra`, `masivo`, …) y asesor |
+| POST | `/admin/precios/masivo` | `precios.masivo` | `{ filtros: {categoria?, marca_id?, proveedor_id?, tipo?, ids?}, modo: porcentaje\|valor, valor, redondeo: ninguno\|cien\|mil, aplicar }`. Exige un filtro. `aplicar: false` = vista previa. Los productos sin precio no se tocan |
+| POST / PUT / DELETE | `/admin/productos/:id/compatibilidades`, `/admin/compatibilidades/:id` | `compatibilidades.editar` | Verificada exige fuente |
+| GET · POST / PUT | `/admin/fabricantes`, `/admin/modelos`, `/admin/versiones` | `catalogo.ver` · `productos.editar` | Catálogo de motos |
+| GET · POST / PUT | `/admin/categorias/arbol`, `/admin/categorias[/:id]` | `catalogo.ver` · `productos.editar` | Dos niveles (grupo › categoría), con sinónimos que usa el asistente y la búsqueda |
+| GET · POST / PUT | `/admin/marcas[/:id]` | `catalogo.ver` · `productos.editar` | Marca de fabricante = original |
+| GET · POST / PUT | `/admin/proveedores[/:id]` | `catalogo.ver` · `compras.gestionar` | |
+| GET | `/admin/inventario/alertas` · `/admin/inventario/movimientos?producto_id&tipo&asesor_id&desde&hasta` · `/admin/inventario/:productoId/movimientos` | `inventario.ver` | Alertas y bitácora |
+| POST | `/admin/inventario/:productoId/movimientos` | `inventario.mover` | `{ tipo: entrada\|salida, cantidad, motivo }` o `{ tipo: ajuste, cantidad_nueva, motivo }` |
+| GET · POST / PUT | `/admin/compras[/:id]` | `inventario.ver` · `compras.gestionar` | Borrador editable `{ proveedor_id, factura_proveedor, fecha_compra, notas, lineas[] }` |
+| POST | `/admin/compras/:id/recibir` | `compras.gestionar` (+ `precios.editar` con `actualizar_costos`) | Suma el stock con movimientos `entrada` ligados a la compra |
+| POST | `/admin/compras/:id/anular` | `compras.gestionar` | `{ motivo }`. Si ya se recibió, saca las unidades; 409 si ya se vendieron |
+| GET · PATCH | `/admin/cotizaciones[/:codigo]` | `ventas.ver` · `pedidos.gestionar` | `{ estado: anulada\|vencida }` |
+| GET · PATCH | `/admin/pedidos?estado&q[/:codigo]` | `ventas.ver` · `pedidos.gestionar` | `{ estado?, estado_pago? }`. Cancelar devuelve stock |
+| GET · POST | `/admin/pedidos/:codigo/pagos` | `ventas.ver` · `pedidos.gestionar` | Pago manual verificado por un asesor `{ monto, metodo, referencia, estado: aprobado\|rechazado }`. El pedido queda `confirmado` solo cuando lo aprobado cubre el total |
+| GET · PATCH | `/admin/transferencias[/:id]` | `ventas.ver` · `atencion.gestionar` | Atención humana |
+| GET · POST | `/admin/transferencias/:id/mensajes` | `ventas.ver` · `atencion.gestionar` | Ver conversación / responder |
+| GET · PUT | `/admin/configuracion[/:clave]` | sesión · `configuracion.editar` | `{ valor, confirmado }` |
+| GET / POST / PATCH | `/admin/asesores[/:id]` | `usuarios.gestionar` | Usuarios del panel |
+| GET / POST · PUT | `/admin/roles` · `/admin/roles/:clave/permisos` | `usuarios.gestionar` | Roles y sus permisos (el rol admin no se edita) |
+| GET | `/admin/eventos?nivel` · `/admin/auditoria?tabla&registro_id&asesor_id` | `auditoria.ver` | Eventos y quién cambió qué |
 
 Transiciones de pedido: `registrado → confirmado | cancelado`, `confirmado → en_preparacion | cancelado`, `en_preparacion → enviado | entregado | cancelado`, `enviado → entregado`.

@@ -235,6 +235,8 @@ Convenciones actuales que se mantienen: prefijo `/api`, respuesta `{ ok: true, d
 
 ### 4.3 Panel (cookie de sesión de asesor + permiso)
 
+> **Estado (fase 4B):** ya funcionan todas las áreas de esta tabla **excepto** imágenes, importación, exportación, promociones y tarifas de envío del panel, que quedan para la fase 4C (necesitan Supabase Storage y la librería de hojas de cálculo).
+
 Cada ruta exige un permiso (§ 5.2). Las escrituras quedan en `auditoria`.
 
 | Área | Rutas |
@@ -271,9 +273,11 @@ Sin cambios: `POST /api/integraciones/mensaje`, `/integraciones/eventos`, `/coti
 | Credencial | Correo + contraseña (bcrypt costo 12) | Correo + contraseña (bcrypt costo 12) |
 | Token | JWT HS256, `aud: "panel"`, 8 h | JWT HS256, `aud: "tienda"`, 30 días |
 | Transporte | Cookie `drj_panel`: `HttpOnly`, `Secure`, `SameSite=None` (frontend y backend en dominios distintos) | Cookie `drj_cliente`, mismos atributos |
-| CSRF | Token doble (`X-CSRF-Token` = cookie no `HttpOnly`) en toda escritura | Igual |
+| CSRF | `X-CSRF-Token` en toda escritura hecha con la cookie. El token es `HMAC(JWT_SECRET, "csrf:" + jwt)`: lo devuelven el login y `/yo` en el cuerpo (una cookie no `HttpOnly` no sirve porque el frontend está en otro dominio y no puede leerla) | Igual |
 | Revocación | Se consulta `asesores.activo` y el rol en cada solicitud (como hoy) | Se consulta `clientes` en cada solicitud |
 | Límites | 10 intentos de login / 15 min (actual) | Igual |
+
+Mientras el panel actual se migra a cookies (fase 5), el login también devuelve el token en el cuerpo y el backend sigue aceptando `Authorization: Bearer` (lo usa n8n). Con `Bearer` no se pide CSRF, porque un sitio ajeno no puede poner ese encabezado.
 
 El token deja de estar en `sessionStorage`: JavaScript no puede leerlo, así que un XSS no puede robarlo. Un token de cliente nunca abre rutas del panel (se verifica `aud`).
 
@@ -532,6 +536,7 @@ Cada módulo expone servicios con SQL; las rutas solo validan, llaman al servici
 | `008_comercial.sql` | Promociones y tabla `tarifas_envio` (vacía: el costo sigue saliendo de `costo_envio` en configuración, que el dueño aún no confirma; el servicio pasará a la tabla en la fase 7) |
 | `009_importaciones.sql` | Importaciones y errores |
 | `010_busqueda.sql` | `pg_trgm`, `f_normalizar`, `busqueda tsvector`, índices |
+| `011_tienda.sql` | `clientes.cuenta_creada_at` (el historial de la cuenta solo muestra pedidos hechos desde que se abrió, porque el teléfono no se verifica por SMS), clave `whatsapp_ventas` sin confirmar, reindexación de la búsqueda al cambiar nombre o sinónimos de una categoría o marca, `fuzzystrmatch` + `f_coincide_aprox` para errores de digitación ("bugia" → bujía) |
 
 Las columnas viejas (`productos.categoria`, `modelos_motocicleta.fabricante`, `marcas.tipo`) se rellenan en sus reemplazos y se quitan en la misma migración 003, porque en el mismo pull request todo el código se adaptó. Las migraciones se prueban de dos formas: sobre una base vacía y sobre una base con el esquema 001–002 y los datos demo anteriores (como está hoy en Render).
 

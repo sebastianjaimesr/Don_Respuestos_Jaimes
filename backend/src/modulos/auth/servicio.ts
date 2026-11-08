@@ -1,9 +1,8 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { pool } from '../../db';
-import { config } from '../../config';
 import { AppError } from '../../errores';
 import type { Rol } from '../../middleware/auth';
+import { firmarSesion } from '../../middleware/sesion';
 import { registrarEvento } from '../eventos/servicio';
 
 // Hash ficticio para comparar aunque el usuario no exista (mismo tiempo de respuesta)
@@ -18,11 +17,7 @@ export async function iniciarSesion(email: string, password: string) {
     throw new AppError(401, 'CREDENCIALES_INVALIDAS', 'Correo o contraseña incorrectos');
   }
   await pool.query('UPDATE asesores SET ultimo_acceso = now() WHERE id = $1', [u.id]);
-  const token = jwt.sign({ nombre: u.nombre, rol: u.rol }, config.JWT_SECRET, {
-    subject: String(u.id),
-    expiresIn: config.JWT_EXPIRA_EN as jwt.SignOptions['expiresIn'],
-    algorithm: 'HS256',
-  });
+  const token = firmarSesion('panel', u.id, { nombre: u.nombre, rol: u.rol });
   void registrarEvento('info', 'login', `Inicio de sesión de asesor #${u.id}`, { asesor_id: u.id });
   return { token, usuario: { id: u.id, nombre: u.nombre, email: u.email, rol: u.rol as Rol } };
 }

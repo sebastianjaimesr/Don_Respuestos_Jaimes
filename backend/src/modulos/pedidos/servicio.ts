@@ -54,7 +54,14 @@ async function buscarPorClave(clave: string) {
  * - En UNA transacción: bloquea inventario, valida stock y precios, calcula
  *   totales, guarda pedido + detalle, descuenta stock y deja movimientos.
  */
-export async function registrarPedido(entradaCruda: unknown) {
+export interface OpcionesPedido {
+  canal?: 'web' | 'chat' | 'whatsapp' | 'telegram' | 'panel';
+  carritoId?: string | null;
+  /** Cliente con sesión iniciada: el pedido queda en su cuenta (no se busca por teléfono). */
+  clienteId?: number | null;
+}
+
+export async function registrarPedido(entradaCruda: unknown, opciones: OpcionesPedido = {}) {
   const entrada = esquemaRegistrarPedido.parse(entradaCruda);
   if (entrada.confirmado_por_cliente !== true) {
     throw new AppError(400, 'CONFIRMACION_REQUERIDA', 'El cliente debe confirmar explícitamente el pedido antes de registrarlo');
@@ -69,13 +76,15 @@ export async function registrarPedido(entradaCruda: unknown) {
 
   try {
     const codigo = await enTransaccion(async (db) => {
-      const clienteId = await upsertCliente(db, {
-        nombre: entrada.cliente.nombre,
-        telefono: entrada.cliente.telefono,
-        ciudad: entrada.cliente.ciudad,
-        direccion: entrada.cliente.direccion ?? entrada.entrega.direccion ?? null,
-        email: entrada.cliente.email ?? null,
-      });
+      const clienteId = opciones.clienteId
+        ? opciones.clienteId
+        : await upsertCliente(db, {
+            nombre: entrada.cliente.nombre,
+            telefono: entrada.cliente.telefono,
+            ciudad: entrada.cliente.ciudad,
+            direccion: entrada.cliente.direccion ?? entrada.entrega.direccion ?? null,
+            email: entrada.cliente.email ?? null,
+          });
 
       const t = await calcularLineas(db, entrada.items, { bloquear: true, costoEnvio: costo, envioAplica });
 
@@ -90,8 +99,8 @@ export async function registrarPedido(entradaCruda: unknown) {
 
       const { rows } = await db.query(
         `INSERT INTO pedidos (cliente_id, cotizacion_id, conversacion_id, modalidad_entrega, ciudad_entrega, direccion_entrega,
-                              metodo_pago, subtotal, costo_envio, envio_confirmado, total, confirmado_por_cliente, clave_idempotencia, notas)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13)
+                              metodo_pago, subtotal, costo_envio, envio_confirmado, total, confirmado_por_cliente, clave_idempotencia, notas, canal, carrito_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, $14, $15)
          RETURNING id, codigo`,
         [
           clienteId,
@@ -107,6 +116,8 @@ export async function registrarPedido(entradaCruda: unknown) {
           t.total,
           entrada.clave_idempotencia,
           entrada.notas ?? null,
+          opciones.canal ?? 'chat',
+          opciones.carritoId ?? null,
         ],
       );
       const pedido = rows[0];
@@ -141,7 +152,7 @@ export async function registrarPedido(entradaCruda: unknown) {
 export async function obtenerPedido(codigo: string) {
   const { rows } = await pool.query(
     `SELECT pe.id, pe.codigo, pe.estado, pe.modalidad_entrega, pe.ciudad_entrega, pe.direccion_entrega, pe.metodo_pago, pe.estado_pago,
-            pe.subtotal, pe.costo_envio, pe.envio_confirmado, pe.total, pe.created_at, pe.updated_at, pe.notas,
+            pe.subtotal, pe.costo_envio, pe.envio_confirmado, pe.total, pe.created_at, pe.updated_at, pe.notas, pe.canal,
             cl.nombre AS cliente_nombre, cl.telefono AS cliente_telefono, cl.ciudad AS cliente_ciudad,
             co.codigo AS cotizacion_codigo, pe.conversacion_id
      FROM pedidos pe JOIN clientes cl ON cl.id = pe.cliente_id LEFT JOIN cotizaciones co ON co.id = pe.cotizacion_id

@@ -6,6 +6,7 @@ import { manejadorErrores } from './errores';
 import { rutasPublicas } from './rutas/publicas';
 import { rutasIntegraciones } from './rutas/integraciones';
 import { rutasAdmin } from './rutas/admin';
+import { rutasTienda } from './rutas/tienda';
 import { pool } from './db';
 
 export function crearApp() {
@@ -16,7 +17,9 @@ export function crearApp() {
   app.use(
     cors({
       origin: config.CORS_ORIGENES.split(',').map((o) => o.trim()),
-      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-CSRF-Token'],
+      // Cookies de sesión entre dominios (GitHub Pages → Render)
+      credentials: true,
     }),
   );
   // Guardamos el cuerpo crudo para poder verificar firmas HMAC de webhooks
@@ -39,6 +42,7 @@ export function crearApp() {
   });
 
   app.use('/api', rutasPublicas);
+  app.use('/api', rutasTienda);
   app.use('/api', rutasIntegraciones);
   app.use('/api', rutasAdmin);
 
