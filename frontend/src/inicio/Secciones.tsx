@@ -77,7 +77,7 @@ function useDatos<T>(ruta: string) {
 
 export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
   const categorias = useDatos<Categoria[]>('/categorias');
-  const modelos = useDatos<{ id: number; nombre: string }[]>('/modelos');
+  const modelos = useDatos<{ id: number; nombre: string; fabricante?: string }[]>('/modelos');
   const consultar = (t: string) => irAlAsistente(() => preguntar(t));
 
   const destacadas = (categorias.datos ?? []).filter((c) => IMAGEN_POR_CATEGORIA[c.clave]);
@@ -190,10 +190,10 @@ export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
                 <li key={mo.id}>
                   <button
                     type="button"
-                    onClick={() => consultar(`Tengo una ${mo.nombre}, ¿qué repuestos tienen?`)}
+                    onClick={() => consultar(`Tengo una ${mo.fabricante ? `${mo.fabricante} ` : ''}${mo.nombre}, ¿qué repuestos tienen?`)}
                     className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-electrico-400/50 hover:bg-electrico-500/15 hover:text-white"
                   >
-                    {mo.nombre}
+                    {mo.fabricante ? `${mo.fabricante} ${mo.nombre}` : mo.nombre}
                   </button>
                 </li>
               ))}

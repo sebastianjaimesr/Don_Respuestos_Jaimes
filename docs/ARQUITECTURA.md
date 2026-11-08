@@ -113,7 +113,7 @@ erDiagram
     varchar codigo_barras UK "opcional"
     varchar slug UK
     int categoria_id FK
-    int marca_repuesto_id FK
+    int marca_id FK
     varchar tipo "original | generico | alternativo"
     numeric precio_compra
     numeric precio "venta, NULL = sin confirmar"
@@ -173,8 +173,8 @@ erDiagram
 | `codigo_barras` | `VARCHAR(40)` | Opcional, único si existe |
 | `slug` | `VARCHAR(180)` | Para la URL pública `/producto/:slug` |
 | `categoria_id` | FK | Reemplaza `categoria` (texto); la migración la llena desde la clave actual |
-| `marca_repuesto_id` | FK | Renombre de `marca_id` |
-| `tipo` | `original \| generico \| alternativo` | Ya no depende de la marca. `original` exige que la marca tenga `fabricante_moto_id` (se valida en el servicio, porque cruza tablas) |
+| `marca_id` | FK | Conserva el nombre; ahora apunta a `marcas_repuesto` |
+| `tipo` | `original \| generico \| alternativo` | Ya no depende de la marca. `original` si y solo si la marca tiene `fabricante_moto_id`; lo valida un trigger de la BD (`ck_producto_original_oem`) |
 | `precio_compra` | `NUMERIC(14,2)` | Opcional, ≥ 0. Solo visible en el panel |
 | `precio` | `NUMERIC(14,2)` | Precio de venta en COP. `NULL` = sin confirmar: no se muestra ni se vende |
 | `margen` | `NUMERIC(6,2)` generado | `(precio − precio_compra) / precio × 100` cuando ambos existen |
@@ -284,12 +284,14 @@ Los permisos se verifican en el servidor con `requerirPermiso('productos.editar'
 | Permiso | admin | vendedor | consulta |
 |---|:-:|:-:|:-:|
 | `catalogo.ver`, `inventario.ver`, `ventas.ver` | ✔ | ✔ | ✔ |
-| `productos.editar`, `compatibilidades.editar`, `imagenes.editar` | ✔ | ✔ | |
+| `productos.editar`, `compatibilidades.editar`, `imagenes.editar` | ✔ | | |
 | `precios.editar`, `precios.masivo` | ✔ | | |
 | `inventario.mover`, `compras.gestionar` | ✔ | ✔ | |
 | `importaciones.aplicar`, `exportaciones.descargar` | ✔ | | |
 | `pedidos.gestionar`, `atencion.gestionar` | ✔ | ✔ | |
 | `configuracion.editar`, `usuarios.gestionar`, `auditoria.ver` | ✔ | | |
+
+Igual que hoy, editar productos, compatibilidades e imágenes queda solo para el administrador; el vendedor mueve inventario, registra compras y gestiona pedidos y atención.
 
 Los roles se pueden ampliar desde el panel (`roles` y `rol_permisos`); la lista de permisos la define el código.
 
@@ -523,17 +525,17 @@ Cada módulo expone servicios con SQL; las rutas solo validan, llaman al servici
 | Archivo | Contenido |
 |---|---|
 | `003_catalogo_multimarca.sql` | `fabricantes_moto` (+ carga de las 13 marcas), `fabricante_id` en modelos con relleno desde el texto actual, `versiones_moto`, `categorias` (+ carga desde las 12 claves actuales y el árbol nuevo), renombre `marcas → marcas_repuesto`, columnas nuevas de productos con relleno (`sku ← referencia`, `categoria_id ← categoria`), `version_id` en compatibilidades |
-| `004_proveedores_compras_imagenes.sql` | Proveedores, compras, detalle, `compra_id` en movimientos, imágenes |
+| `004_compras_imagenes.sql` | Compras, detalle, `compra_id` en movimientos, imágenes (los proveedores se crean en 003) |
 | `005_auditoria_precios.sql` | `auditoria`, `historial_precios`, triggers, protección de `inventario.cantidad` |
 | `006_roles_permisos.sql` | Roles, permisos y matriz inicial; FK desde `asesores.rol` |
 | `007_clientes_carrito.sql` | Cuenta de cliente, carritos, favoritos, `canal` y `carrito_id` en pedidos, `pagos` |
-| `008_comercial.sql` | Promociones, tarifas de envío (migra `costo_envio` de configuración) |
+| `008_comercial.sql` | Promociones y tabla `tarifas_envio` (vacía: el costo sigue saliendo de `costo_envio` en configuración, que el dueño aún no confirma; el servicio pasará a la tabla en la fase 7) |
 | `009_importaciones.sql` | Importaciones y errores |
 | `010_busqueda.sql` | `pg_trgm`, `f_normalizar`, `busqueda tsvector`, índices |
 
-Las columnas viejas (`productos.categoria`, `modelos_motocicleta.fabricante`) se quitan en una migración posterior, cuando ningún código las use. Cada migración se prueba sobre una copia con los datos demo actuales.
+Las columnas viejas (`productos.categoria`, `modelos_motocicleta.fabricante`, `marcas.tipo`) se rellenan en sus reemplazos y se quitan en la misma migración 003, porque en el mismo pull request todo el código se adaptó. Las migraciones se prueban de dos formas: sobre una base vacía y sobre una base con el esquema 001–002 y los datos demo anteriores (como está hoy en Render).
 
-**Datos de demostración:** `database/seeds/demo_multimarca.sql` con varios fabricantes, modelos reales con años **sin verificar** (`es_demo = true`), productos `DEMO-*` de varias categorías con precios ficticios en COP, stock y compatibilidades marcadas como no verificadas. `borrar_demo.sql` se actualiza para limpiar todo lo nuevo.
+**Datos de demostración:** `database/seeds/demo_ficticio.sql` (reescrito) con varios fabricantes, modelos reales con años **sin verificar** (los nuevos con `es_demo = true`), productos `DEMO-*` de varias categorías con precios ficticios en COP, stock y compatibilidades marcadas como no verificadas. `borrar_demo.sql` se actualiza para limpiar todo lo nuevo.
 
 ---
 

@@ -1,7 +1,10 @@
 import { pool, Consultor } from '../../db';
 import { AppError } from '../../errores';
 import { detectarCategoria, detectarModelo, ModeloCatalogo } from '../../asistente/extraccion';
-import { categoriaPorClave, esCategoriaDeSeguridad } from './categorias';
+import { asegurarCategorias, categoriaPorClave, esCategoriaDeSeguridad } from './categorias';
+
+/** original = marca del fabricante de la moto; generico/alternativo = otra marca. */
+export type TipoProducto = 'original' | 'generico' | 'alternativo';
 
 export interface ResultadoProducto {
   producto_id: number;
@@ -9,7 +12,7 @@ export interface ResultadoProducto {
   nombre: string;
   categoria: string;
   posicion: 'delantero' | 'trasero' | null;
-  tipo: 'original' | 'generico';
+  tipo: TipoProducto;
   marca: string;
   precio: string | null; // NUMERIC como texto; null = precio NO confirmado
   precio_confirmado: boolean;
@@ -41,8 +44,8 @@ export type EstadoBusqueda =
 
 export interface ResultadoBusqueda {
   estado: EstadoBusqueda;
-  modelo: { id: number; nombre: string } | null;
-  candidatos_modelo?: { id: number; nombre: string }[];
+  modelo: { id: number; nombre: string; fabricante: string } | null;
+  candidatos_modelo?: { id: number; nombre: string; fabricante: string }[];
   anio: number;
   categoria: string | null;
   opciones_categoria?: string[];
@@ -52,16 +55,21 @@ export interface ResultadoBusqueda {
 }
 
 export async function listarModelos(db: Consultor = pool): Promise<ModeloCatalogo[]> {
-  const { rows } = await db.query<ModeloCatalogo>('SELECT id, nombre, alias FROM modelos_motocicleta WHERE activo ORDER BY nombre');
+  const { rows } = await db.query<ModeloCatalogo>(
+    `SELECT mo.id, mo.nombre, mo.alias, f.nombre AS fabricante
+     FROM modelos_motocicleta mo JOIN fabricantes_moto f ON f.id = mo.fabricante_id
+     WHERE mo.activo AND f.activo ORDER BY f.nombre, mo.nombre`,
+  );
   return rows;
 }
 
 const SELECT_PRODUCTO = `
-  SELECT p.id AS producto_id, p.referencia, p.nombre, p.categoria, p.posicion, p.tipo, ma.nombre AS marca,
+  SELECT p.id AS producto_id, p.sku AS referencia, p.nombre, cat.slug AS categoria, p.posicion, p.tipo, ma.nombre AS marca,
          p.precio, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias,
          mo.nombre AS modelo, c.anio_desde, c.anio_hasta, c.verificada, c.fuente, c.notas
   FROM productos p
-  JOIN marcas ma ON ma.id = p.marca_id
+  JOIN categorias cat ON cat.id = p.categoria_id
+  JOIN marcas_repuesto ma ON ma.id = p.marca_id
   JOIN v_estado_inventario e ON e.producto_id = p.id
   JOIN compatibilidades c ON c.producto_id = p.id
   JOIN modelos_motocicleta mo ON mo.id = c.modelo_id`;
@@ -102,6 +110,7 @@ export async function buscarRepuesto(entrada: {
   anio: number;
   repuesto: string;
   posicion?: 'delantero' | 'trasero' | null;
+  /** 'generico' significa "no original": incluye genéricos y alternativos. */
   tipo?: 'original' | 'generico' | null;
 }): Promise<ResultadoBusqueda> {
   const base = { anio: entrada.anio, resultados: [], fuera_de_rango: [] } as const;
@@ -109,6 +118,7 @@ export async function buscarRepuesto(entrada: {
     throw new AppError(400, 'ANIO_INVALIDO', 'El año de la moto no es válido');
   }
 
+  await asegurarCategorias();
   // 1. Resolver modelo
   const modelos = await listarModelos();
   let modelo: ModeloCatalogo | undefined;
@@ -117,12 +127,12 @@ export async function buscarRepuesto(entrada: {
   } else {
     const r = detectarModelo(String(entrada.modelo), modelos);
     if (r.tipo === 'ambiguo') {
-      return { ...base, resultados: [], fuera_de_rango: [], estado: 'modelo_ambiguo', modelo: null, categoria: null, candidatos_modelo: r.candidatos.map(({ id, nombre }) => ({ id, nombre })) };
+      return { ...base, resultados: [], fuera_de_rango: [], estado: 'modelo_ambiguo', modelo: null, categoria: null, candidatos_modelo: r.candidatos.map(({ id, nombre, fabricante }) => ({ id, nombre, fabricante: fabricante ?? '' })) };
     }
     if (r.tipo === 'encontrado') modelo = r.modelo;
   }
   if (!modelo) return { ...base, resultados: [], fuera_de_rango: [], estado: 'modelo_no_encontrado', modelo: null, categoria: null };
-  const modeloInfo = { id: modelo.id, nombre: modelo.nombre };
+  const modeloInfo = { id: modelo.id, nombre: modelo.nombre, fabricante: modelo.fabricante ?? '' };
 
   // 2. Resolver categoría
   const cat = detectarCategoria(entrada.repuesto);
@@ -137,9 +147,9 @@ export async function buscarRepuesto(entrada: {
   // 3. Consulta parametrizada (nunca concatenamos texto del cliente en SQL)
   const { rows } = await pool.query(
     `${SELECT_PRODUCTO}
-     WHERE p.activo AND c.modelo_id = $1 AND p.categoria = $2
+     WHERE p.activo AND c.modelo_id = $1 AND cat.slug = $2
        AND ($3::text IS NULL OR p.posicion = $3)
-       AND ($4::text IS NULL OR p.tipo = $4)
+       AND ($4::text IS NULL OR (p.tipo = 'original') = ($4 = 'original'))
      ORDER BY (p.tipo = 'original') DESC, p.precio NULLS LAST, p.id`,
     [modelo.id, cat.clave, requierePos ? entrada.posicion ?? null : null, entrada.tipo ?? null],
   );
@@ -158,21 +168,27 @@ export async function buscarRepuesto(entrada: {
 /** Producto por id con su inventario (para carrito, cotización y pedido). */
 export async function obtenerProductoVenta(productoId: number, db: Consultor = pool) {
   const { rows } = await db.query(
-    `SELECT p.id, p.referencia, p.nombre, p.categoria, p.posicion, p.tipo, p.precio, p.activo, p.es_demo, ma.nombre AS marca,
+    `SELECT p.id, p.sku AS referencia, p.nombre, cat.slug AS categoria, p.posicion, p.tipo, p.precio, p.activo, p.es_demo, ma.nombre AS marca,
             e.cantidad, e.estado, e.tiempo_abastecimiento_dias
-     FROM productos p JOIN marcas ma ON ma.id = p.marca_id JOIN v_estado_inventario e ON e.producto_id = p.id
+     FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN marcas_repuesto ma ON ma.id = p.marca_id
+     JOIN v_estado_inventario e ON e.producto_id = p.id
      WHERE p.id = $1`,
     [productoId],
   );
   return rows[0] ?? null;
 }
 
+/** El cliente o n8n pueden enviar el SKU, la referencia del fabricante o el código de barras. */
+const COINCIDE_REFERENCIA = `(p.sku = upper(regexp_replace(btrim($1), '\\s+', '-', 'g'))
+  OR upper(btrim(p.referencia)) = upper(btrim($1)) OR p.codigo_barras = btrim($1))`;
+
 export async function compatibilidadesPorReferencia(referencia: string) {
   const { rows } = await pool.query(
-    `SELECT p.referencia, p.nombre, p.tipo, mo.nombre AS modelo, c.anio_desde, c.anio_hasta, c.verificada, c.fuente, c.notas
+    `SELECT p.sku AS referencia, p.nombre, p.tipo, f.nombre AS fabricante, mo.nombre AS modelo, c.anio_desde, c.anio_hasta, c.verificada, c.fuente, c.notas
      FROM productos p JOIN compatibilidades c ON c.producto_id = p.id JOIN modelos_motocicleta mo ON mo.id = c.modelo_id
-     WHERE upper(btrim(p.referencia)) = upper(btrim($1)) AND p.activo
-     ORDER BY mo.nombre, c.anio_desde`,
+     JOIN fabricantes_moto f ON f.id = mo.fabricante_id
+     WHERE ${COINCIDE_REFERENCIA} AND p.activo
+     ORDER BY f.nombre, mo.nombre, c.anio_desde`,
     [referencia],
   );
   return rows;
@@ -180,7 +196,7 @@ export async function compatibilidadesPorReferencia(referencia: string) {
 
 export async function compatiblesConModelo(modeloId: number, anio: number) {
   const { rows } = await pool.query(
-    `${SELECT_PRODUCTO} WHERE p.activo AND c.modelo_id = $1 AND $2 BETWEEN c.anio_desde AND c.anio_hasta ORDER BY p.categoria, p.tipo`,
+    `${SELECT_PRODUCTO} WHERE p.activo AND c.modelo_id = $1 AND $2 BETWEEN c.anio_desde AND c.anio_hasta ORDER BY cat.orden, cat.slug, p.tipo`,
     [modeloId, anio],
   );
   return rows.map(aResultado);
@@ -188,9 +204,9 @@ export async function compatiblesConModelo(modeloId: number, anio: number) {
 
 export async function disponibilidadPorReferencia(referencia: string) {
   const { rows } = await pool.query(
-    `SELECT p.referencia, p.nombre, p.tipo, p.precio, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias
+    `SELECT p.sku AS referencia, p.nombre, p.tipo, p.precio, p.es_demo, e.cantidad, e.estado, e.tiempo_abastecimiento_dias
      FROM productos p JOIN v_estado_inventario e ON e.producto_id = p.id
-     WHERE upper(btrim(p.referencia)) = upper(btrim($1)) AND p.activo`,
+     WHERE ${COINCIDE_REFERENCIA} AND p.activo`,
     [referencia],
   );
   if (!rows[0]) throw new AppError(404, 'PRODUCTO_NO_ENCONTRADO', 'No existe un producto activo con esa referencia');

@@ -24,11 +24,11 @@ Crea un usuario por persona (Panel → Usuarios). Así la bitácora dice quién 
 
 ## 1. Marcas: original vs. genérico
 
-Cada producto pertenece a una marca, y la **marca decide si es original o genérico**. "Yamaha" ya existe como marca original. Para repuestos de otras marcas, crea la marca como *genérico*. La base de datos no permite mezclarlos.
+Cada producto pertenece a una marca de repuesto, y la **marca decide si es original**: una marca es *original* cuando es la del fabricante de la moto (Yamaha, Honda, Bajaj, AKT…). Los 13 fabricantes ya vienen registrados; "Yamaha" y "Honda" ya existen como marcas originales y las demás se crean al primer producto. Una marca de otra empresa es *genérica* y cada producto suyo se puede marcar como **genérico** o **alternativo**. La base de datos no permite mezclarlos: un producto de marca Honda siempre es "Original Honda".
 
 ## 2. Modelos de moto
 
-Ya vienen FZ 2.0, FZ 25, NMAX, XTZ 125, XTZ 150, YBR 125, BWS 125, Crypton, MT-03 y R15. Los **alias** son las formas en que los clientes escriben el modelo (`fz2`, `n max`, `biwis`…). Si una palabra sirve para dos modelos (ej. `fz`), el asistente preguntará cuál es: eso es intencional, porque motos con nombres parecidos no comparten repuestos.
+Cada modelo pertenece a un fabricante. Ya vienen los modelos Yamaha FZ 2.0, FZ 25, NMAX, XTZ 125, XTZ 150, YBR 125, BWS 125, Crypton, MT-03 y R15. Los datos de demostración agregan Honda CB 190R, Bajaj Pulsar NS 200, AKT NKD 125, Suzuki GN 125 y TVS Apache RTR 160 (marcados como demo: se borran con `borrar_demo.sql`). Los **alias** son las formas en que los clientes escriben el modelo (`fz2`, `n max`, `biwis`…). Si una palabra sirve para dos modelos (ej. `fz`), el asistente preguntará cuál es: eso es intencional, porque motos con nombres parecidos no comparten repuestos.
 
 Los años de fabricación de cada modelo quedaron vacíos porque no estaban verificados. Lo que importa para vender es el rango de años de cada **compatibilidad**.
 
@@ -36,8 +36,8 @@ Los años de fabricación de cada modelo quedaron vacíos porque no estaban veri
 
 Panel → Productos → **Nuevo producto**:
 
-- **Referencia:** el código real (del catálogo Yamaha o del proveedor). No se puede repetir.
-- **Categoría y posición:** la posición (delantero/trasero) se pide para frenos y llantas.
+- **Referencia:** el código real (del catálogo del fabricante o del proveedor). Se guarda como SKU en mayúsculas, con guiones en vez de espacios. No se puede repetir.
+- **Categoría y posición:** las categorías están agrupadas (Frenos › Pastillas, Transmisión › Clutch…). La posición (delantero/trasero) se pide para frenos y llantas.
 - **Precio:** si todavía no está confirmado, **déjalo vacío**. El asistente dirá "precio por confirmar con un asesor" y no lo venderá.
 - **Stock mínimo:** cuando el stock llega a ese número, aparece en alertas.
 - **Tiempo de abastecimiento:** solo si el proveedor lo confirmó. El asistente lo menciona cuando el producto está agotado.

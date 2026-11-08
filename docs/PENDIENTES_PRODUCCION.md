@@ -58,6 +58,6 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - ✅ Límite de solicitudes en chat, login y seguimiento.
 - ✅ Webhooks firmados con HMAC-SHA256 y ventana anti-replay.
 - ✅ Idempotencia de pedidos y bloqueo de inventario (`FOR UPDATE`) contra ventas simultáneas.
-- ✅ `CHECK` en base de datos: stock y cantidades nunca negativos, totales cuadrados, tipo original/genérico atado a la marca.
+- ✅ `CHECK` en base de datos: stock y cantidades nunca negativos, totales cuadrados, un producto es original si y solo si su marca es la del fabricante de la moto (trigger), y el stock solo cambia con un movimiento registrado (`fn_mover_stock`).
 - ✅ Bitácora de movimientos de inventario y de eventos (sin teléfonos, direcciones ni secretos).
 - ✅ El chat no guarda mensajes que parezcan números de tarjeta y advierte al cliente.

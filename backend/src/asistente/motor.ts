@@ -1,7 +1,7 @@
 import { AppError } from '../errores';
 import { pool as poolSinBloqueo } from '../db'; // lecturas sin transacción
 import { buscarRepuesto, listarModelos, obtenerProductoVenta, ResultadoBusqueda, ResultadoProducto } from '../modulos/catalogo/servicio';
-import { ADVERTENCIA_SEGURIDAD, CATEGORIAS, categoriaPorClave } from '../modulos/catalogo/categorias';
+import { ADVERTENCIA_SEGURIDAD, asegurarCategorias, categoriaPorClave } from '../modulos/catalogo/categorias';
 import { crearCotizacion } from '../modulos/cotizaciones/servicio';
 import { registrarPedido } from '../modulos/pedidos/servicio';
 import { escalarAHumano, MotivoEscalamiento } from '../modulos/escalamiento/servicio';
@@ -19,14 +19,20 @@ import {
   detectarOpcion,
   detectarPosicion,
   detectarTipo,
+  ModeloCatalogo,
   pareceTarjeta,
+  preguntaCategoria,
 } from './extraccion';
 import type { AccionEntrada, BotonAccion, Contexto, DatosEntrega, Respuesta } from './tipos';
 
 export const SALUDO = '¡Hola! Soy Don Repuestos Jaimes 🏍️ ¿En qué te puedo ayudar hoy?';
-export const DESPEDIDA = '¡Gracias por confiar en Don Repuestos Jaimes! Que esa Yamaha siga rodando 🔧';
+export const DESPEDIDA = '¡Gracias por confiar en Don Repuestos Jaimes! Que esa moto siga rodando 🔧';
 
-const ETIQUETA_TIPO = { original: 'Original Yamaha', generico: 'Genérico' } as const;
+/** "Original Yamaha", "Original Honda"… o "Genérico" / "Alternativo". La marca original es la del fabricante. */
+const etiquetaTipo = (p: Pick<ResultadoProducto, 'tipo' | 'marca'>) =>
+  p.tipo === 'original' ? `Original ${p.marca}` : p.tipo === 'alternativo' ? 'Alternativo' : 'Genérico';
+/** Nombre de la moto con su fabricante: "Yamaha FZ 2.0". */
+const nombreMoto = (m: Pick<ModeloCatalogo, 'nombre' | 'fabricante'>) => (m.fabricante ? `${m.fabricante} ${m.nombre}` : m.nombre);
 const ETIQUETA_PAGO: Record<DatosEntrega['metodo_pago'], string> = {
   nequi: 'Nequi',
   daviplata: 'Daviplata',
@@ -72,6 +78,7 @@ export async function procesar(entrada: EntradaMotor): Promise<SalidaMotor> {
   const s: Estado = { ctx, salida, conversacionId: entrada.conversacionId, clienteId: null };
 
   try {
+    await asegurarCategorias();
     if (entrada.accion) await manejarAccion(s, entrada.accion);
     else await manejarTexto(s, entrada.texto ?? '', entrada.estadoConversacion);
   } catch (e) {
@@ -118,7 +125,11 @@ async function manejarAccion(s: Estado, a: AccionEntrada) {
     case 'escalar':
       return escalar(s, 'solicitud_cliente', 'El cliente pidió hablar con un asesor (botón)');
     case 'elegir_modelo': {
-      const elegido = s.ctx.candidatos_modelo.find((m) => m.id === a.modelo_id) ?? (await listarModelos()).find((m) => m.id === a.modelo_id);
+      const delCatalogo = async () => {
+        const m = (await listarModelos()).find((x) => x.id === a.modelo_id);
+        return m && { id: m.id, nombre: nombreMoto(m) };
+      };
+      const elegido = s.ctx.candidatos_modelo.find((m) => m.id === a.modelo_id) ?? (await delCatalogo());
       if (!elegido) {
         s.salida.push(texto('No encontré ese modelo. ¿Me escribes el modelo de tu moto?'));
         return;
@@ -266,7 +277,7 @@ async function manejarTexto(s: Estado, entradaTexto: string, estadoConv: Entrada
       return;
     }
     if (prefijoSaludo || intenciones.has('saludo')) {
-      s.salida.push(texto(prefijoSaludo ? SALUDO : '¡Hola de nuevo! ¿Qué repuesto necesitas para tu Yamaha?'));
+      s.salida.push(texto(prefijoSaludo ? SALUDO : '¡Hola de nuevo! ¿Qué repuesto necesitas para tu moto?'));
       return;
     }
     if (intenciones.has('afirmacion')) {
@@ -278,12 +289,12 @@ async function manejarTexto(s: Estado, entradaTexto: string, estadoConv: Entrada
       return;
     }
     if (intenciones.has('fueraDeTema')) {
-      s.salida.push(texto('Ahí sí no te puedo ayudar 😅. Yo me encargo de repuestos para motos Yamaha. ¿Necesitas algún repuesto?'));
+      s.salida.push(texto('Ahí sí no te puedo ayudar 😅. Yo me encargo de repuestos para motos. ¿Necesitas algún repuesto?'));
       return;
     }
     // Respuesta a "¿qué moto?" con un modelo que no está en el catálogo
     if (ctx.esperando === 'modelo') {
-      s.salida.push(texto(`No encontré ese modelo en nuestro catálogo. Trabajamos repuestos Yamaha como ${modelos.slice(0, 6).map((m) => m.nombre).join(', ')}. ¿Cuál es tu moto?`));
+      s.salida.push(texto(`No encontré ese modelo en nuestro catálogo. Algunos de los modelos que tenemos registrados: ${modelos.slice(0, 6).map(nombreMoto).join(', ')}. ¿Cuál es tu moto?`));
       return;
     }
     ctx.no_entendidos += 1;
@@ -294,16 +305,16 @@ async function manejarTexto(s: Estado, entradaTexto: string, estadoConv: Entrada
       );
       return;
     }
-    s.salida.push(texto('No te entendí bien. Cuéntame el modelo y año de tu Yamaha y el repuesto que buscas. Por ejemplo: "pastillas delanteras para FZ 2.0 2018".'));
+    s.salida.push(texto('No te entendí bien. Cuéntame la marca, el modelo y el año de tu moto y el repuesto que buscas. Por ejemplo: "pastillas delanteras para FZ 2.0 2018".'));
     return;
   }
   ctx.no_entendidos = 0;
   if (prefijoSaludo) s.salida.push(texto('¡Hola! Soy Don Repuestos Jaimes 🏍️'));
 
   // 9. Actualizar contexto con lo detectado
-  if (rModelo.tipo === 'encontrado') fijarModelo(ctx, rModelo.modelo.id, rModelo.modelo.nombre);
+  if (rModelo.tipo === 'encontrado') fijarModelo(ctx, rModelo.modelo.id, nombreMoto(rModelo.modelo));
   else if (rModelo.tipo === 'ambiguo') {
-    ctx.candidatos_modelo = rModelo.candidatos.map(({ id, nombre }) => ({ id, nombre }));
+    ctx.candidatos_modelo = rModelo.candidatos.map((m) => ({ id: m.id, nombre: nombreMoto(m) }));
     ctx.moto = { anio: anio ?? ctx.moto.anio };
   }
   if (anio) ctx.moto.anio = anio;
@@ -362,11 +373,10 @@ async function avanzarConsulta(s: Estado) {
   if (ctx.consulta.opciones_categoria?.length && !ctx.consulta.categoria) {
     ctx.esperando = 'categoria';
     const opciones = ctx.consulta.opciones_categoria;
-    const pregunta = opciones.includes('filtro_aire') ? '¿Necesitas el filtro de aire o el filtro de aceite?' : '¿Buscas pastillas, bandas o disco de freno?';
     s.salida.push(
       texto(
-        pregunta,
-        opciones.map((o) => ({ etiqueta: categoriaPorClave(o)!.etiqueta, accion: { tipo: 'elegir_categoria', categoria: o } })),
+        preguntaCategoria(opciones),
+        opciones.map((o) => ({ etiqueta: categoriaPorClave(o)?.etiqueta ?? o, accion: { tipo: 'elegir_categoria', categoria: o } })),
       ),
     );
     return;
@@ -376,7 +386,14 @@ async function avanzarConsulta(s: Estado) {
     s.salida.push(texto(`Perfecto, ${ctx.moto.modelo} ${ctx.moto.anio}. ¿Qué repuesto necesitas?`));
     return;
   }
-  const cat = categoriaPorClave(ctx.consulta.categoria)!;
+  const cat = categoriaPorClave(ctx.consulta.categoria);
+  if (!cat) {
+    // La categoría se desactivó en el panel mientras la conversación seguía abierta
+    ctx.consulta = { tipo: ctx.consulta.tipo };
+    ctx.esperando = 'categoria';
+    s.salida.push(texto('¿Qué repuesto necesitas?'));
+    return;
+  }
   if (cat.requierePosicion && !ctx.consulta.posicion) {
     ctx.esperando = 'posicion';
     const plural = cat.etiqueta.toLowerCase();
@@ -406,7 +423,8 @@ async function buscarYPresentar(s: Estado) {
     tipo: ctx.consulta.tipo ?? null,
   });
   const cat = categoriaPorClave(ctx.consulta.categoria!)!;
-  const moto = `${r.modelo?.nombre} ${r.anio}`;
+  const motoSinAnio = r.modelo ? nombreMoto(r.modelo) : '';
+  const moto = `${motoSinAnio} ${r.anio}`;
   const nombreRep = `${cat.etiqueta.toLowerCase()}${ctx.consulta.posicion ? (ctx.consulta.posicion === 'delantero' ? ' delanter' : ' traser') + (/^(pastillas|bandas)/.test(cat.clave) ? 'as' : cat.clave === 'llanta' ? 'a' : 'o') : ''}`;
   ctx.ultimos_resultados = [];
 
@@ -414,14 +432,14 @@ async function buscarYPresentar(s: Estado) {
     const rangos = [...new Set(r.fuera_de_rango.map((p) => `${p.compatibilidad.anio_desde}–${p.compatibilidad.anio_hasta}`))].join(', ');
     s.salida.push(
       texto(
-        `Tengo ${nombreRep} para la ${r.modelo?.nombre}, pero registradas solo para los años ${rangos}. Para tu ${r.anio} no está confirmada la compatibilidad, así que no te la puedo ofrecer como segura. ¿Quieres que un asesor lo revise?`,
+        `Tengo ${nombreRep} para la ${motoSinAnio}, pero registradas solo para los años ${rangos}. Para tu ${r.anio} no está confirmada la compatibilidad, así que no te la puedo ofrecer como segura. ¿Quieres que un asesor lo revise?`,
         [{ etiqueta: 'Sí, que lo revise un asesor', accion: { tipo: 'escalar' } }, { etiqueta: 'Buscar otro repuesto', accion: { tipo: 'nueva_busqueda' } }],
       ),
     );
     return;
   }
   if (r.estado !== 'ok') {
-    const filtroTipo = ctx.consulta.tipo ? ` (${ETIQUETA_TIPO[ctx.consulta.tipo].toLowerCase()})` : '';
+    const filtroTipo = ctx.consulta.tipo ? ` (${ctx.consulta.tipo === 'original' ? 'original' : 'no original'})` : '';
     s.salida.push(
       texto(`No encontré ${nombreRep}${filtroTipo} para tu ${moto} en nuestro inventario. ¿Quieres que un asesor lo revise o buscamos otro repuesto?`, [
         { etiqueta: 'Que lo revise un asesor', accion: { tipo: 'escalar' } },
@@ -436,8 +454,9 @@ async function buscarYPresentar(s: Estado) {
   const varios = productos.length > 1;
   const bloques = productos.map((p, i) => formatoProducto(p, varios ? i + 1 : null));
   const notas: string[] = [];
-  if (productos.some((p) => p.tipo === 'original') && productos.some((p) => p.tipo === 'generico')) {
-    notas.push('La diferencia: el original es de marca Yamaha; el genérico es de otra marca y por lo general más económico.');
+  if (productos.some((p) => p.tipo === 'original') && productos.some((p) => p.tipo !== 'original')) {
+    const fab = r.modelo?.fabricante || 'el fabricante de tu moto';
+    notas.push(`La diferencia: el original es de la marca ${fab}; las otras opciones son de otra marca y por lo general más económicas.`);
   }
   if (productos.some((p) => p.advertencia_seguridad)) notas.push(ADVERTENCIA_SEGURIDAD);
   if (productos.some((p) => p.es_demo)) notas.push('ℹ️ Estos son datos de demostración ficticios, no inventario real.');
@@ -448,7 +467,7 @@ async function buscarYPresentar(s: Estado) {
   else if (vendibles.length === 1) cierre = '¿Quieres agregarlo a tu pedido?';
   else cierre = '¿Cuál quieres agregar a tu pedido? Respóndeme con el número.';
 
-  const encabezado = varios ? `Encontré ${productos.length} opciones para tu Yamaha ${moto}:` : `Encontré esta opción para tu Yamaha ${moto}:`;
+  const encabezado = varios ? `Encontré ${productos.length} opciones para tu ${moto}:` : `Encontré esta opción para tu ${moto}:`;
   const acciones: BotonAccion[] = vendibles.map((p) => ({
     etiqueta: varios ? `Agregar opción ${productos.indexOf(p) + 1}` : 'Agregar al pedido',
     accion: { tipo: 'agregar', producto_id: p.producto_id, cantidad: 1 },
@@ -472,7 +491,7 @@ function vendibilidad(p: ResultadoProducto): { vendible: boolean; razon?: string
 
 /** Solo muestra campos confirmados; lo no confirmado se dice explícitamente. */
 function formatoProducto(p: ResultadoProducto, numero: number | null): string {
-  const lineas = [`${numero ? numero + ') ' : ''}${p.nombre} — ${ETIQUETA_TIPO[p.tipo]}${p.tipo === 'generico' ? ` (${p.marca})` : ''}`];
+  const lineas = [`${numero ? numero + ') ' : ''}${p.nombre} — ${etiquetaTipo(p)}${p.tipo !== 'original' ? ` (${p.marca})` : ''}`];
   lineas.push(`• Referencia: ${p.referencia}`);
   lineas.push(
     p.compatibilidad.verificada
@@ -488,7 +507,7 @@ function formatoProducto(p: ResultadoProducto, numero: number | null): string {
   } else {
     lineas.push(`• Disponibilidad: ${d.cantidad} ${d.cantidad === 1 ? 'unidad' : 'unidades'}`);
   }
-  lineas.push(`• Tipo: ${ETIQUETA_TIPO[p.tipo]}`);
+  lineas.push(`• Tipo: ${etiquetaTipo(p)}`);
   return lineas.join('\n');
 }
 
@@ -887,4 +906,4 @@ function botonesConfirmacion(): BotonAccion[] {
   ];
 }
 
-export const _internos = { validarCampo, resolverOpcionCategoria, CATEGORIAS };
+export const _internos = { validarCampo, resolverOpcionCategoria };

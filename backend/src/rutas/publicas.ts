@@ -7,7 +7,7 @@ import { esquemaMensajeEntrante } from '../asistente/esquemas';
 import { atenderMensaje, saludar } from '../modulos/conversaciones/atencion';
 import { listarMensajes, obtenerConversacion, obtenerOCrear } from '../modulos/conversaciones/servicio';
 import { buscarRepuesto, compatibilidadesPorReferencia, compatiblesConModelo, disponibilidadPorReferencia, listarModelos } from '../modulos/catalogo/servicio';
-import { CATEGORIAS } from '../modulos/catalogo/categorias';
+import { arbolDeCategorias, asegurarCategorias, categoriasHoja } from '../modulos/catalogo/categorias';
 import { informacionPublica } from '../modulos/negocio/servicio';
 import { obtenerCotizacion } from '../modulos/cotizaciones/servicio';
 import { seguimientoPedido } from '../modulos/pedidos/servicio';
@@ -93,8 +93,22 @@ rutasPublicas.get(
   h(async (req, res) => ok(res, await disponibilidadPorReferencia(z.string().max(60).parse(req.params.referencia)))),
 );
 
-rutasPublicas.get('/modelos', h(async (_req, res) => ok(res, (await listarModelos()).map(({ id, nombre }) => ({ id, nombre })))));
-rutasPublicas.get('/categorias', h(async (_req, res) => ok(res, CATEGORIAS.map(({ clave, etiqueta, requierePosicion, seguridad }) => ({ clave, etiqueta, requierePosicion, seguridad })))));
+rutasPublicas.get('/modelos', h(async (_req, res) => ok(res, (await listarModelos()).map(({ id, nombre, fabricante }) => ({ id, nombre, fabricante })))));
+// Lista plana (compatibilidad con el chat actual) y árbol por grupos en /categorias/arbol
+rutasPublicas.get(
+  '/categorias',
+  h(async (_req, res) => {
+    await asegurarCategorias();
+    ok(res, categoriasHoja().map(({ clave, etiqueta, requierePosicion, seguridad, padre }) => ({ clave, etiqueta, requierePosicion, seguridad, grupo: padre })));
+  }),
+);
+rutasPublicas.get(
+  '/categorias/arbol',
+  h(async (_req, res) => {
+    await asegurarCategorias();
+    ok(res, arbolDeCategorias());
+  }),
+);
 rutasPublicas.get('/negocio', h(async (_req, res) => ok(res, await informacionPublica())));
 
 rutasPublicas.get(

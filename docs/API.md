@@ -127,7 +127,8 @@ Acciones (botones): `agregar {producto_id, cantidad}`, `quitar`, `ver_carrito`, 
 | GET | `/compatibilidades?referencia=X` | Modelos/años compatibles con una referencia |
 | GET | `/compatibilidades?modelo_id=1&anio=2018` | Productos compatibles con una moto |
 | GET | `/disponibilidad/:referencia` | Precio, stock y estado |
-| GET | `/modelos`, `/categorias` | Catálogos |
+| GET | `/modelos`, `/categorias` | Catálogos. Cada modelo trae su `fabricante`; cada categoría, su `grupo` |
+| GET | `/categorias/arbol` | Grupos (Frenos, Motor…) con sus categorías |
 | GET | `/negocio` | Datos comerciales (los no confirmados vienen con `valor: null, confirmado: false`) |
 | GET | `/cotizaciones/:codigo` | Cotización (sin datos del cliente) |
 | GET | `/pedidos/seguimiento?codigo=PED-000001&telefono=300...` | Estado del pedido; exige código + teléfono |
@@ -165,7 +166,8 @@ Roles: **admin** (todo), **vendedor** (inventario, pedidos, cotizaciones, atenci
 | POST | `/admin/productos/:id/compatibilidades` | admin | `{ modelo_id, anio_desde, anio_hasta, verificada, fuente, notas }` (verificada exige fuente) |
 | PUT / DELETE | `/admin/compatibilidades/:id` | admin | |
 | GET / POST | `/admin/marcas` | todos / admin | `{ nombre, tipo: original\|generico }` |
-| GET / POST / PUT | `/admin/modelos[/:id]` | todos / admin | `{ nombre, cilindraje_cc, anio_inicio, anio_fin, alias[] }` |
+| GET / POST / PUT | `/admin/modelos[/:id]` | todos / admin | `{ fabricante_id, nombre, cilindraje_cc, anio_inicio, anio_fin, alias[] }` |
+| GET | `/admin/fabricantes` | todos | Fabricantes de motos |
 | GET | `/admin/categorias` | todos | |
 | GET | `/admin/inventario/alertas` | todos | Agotados y stock bajo |
 | POST | `/admin/inventario/:productoId/movimientos` | admin, vendedor | `{ tipo: entrada\|salida, cantidad, motivo }` o `{ tipo: ajuste, cantidad_nueva, motivo }` |

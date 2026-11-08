@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { pool, enTransaccion } from '../../db';
+import { pool, enTransaccion, moverStock } from '../../db';
 import { AppError } from '../../errores';
 import { calcularLineas } from '../ventas/lineas';
 import { upsertCliente } from '../clientes/servicio';
@@ -118,12 +118,7 @@ export async function registrarPedido(entradaCruda: unknown) {
           [pedido.id, l.producto_id, l.descripcion, l.referencia, l.tipo, l.cantidad, l.precio_unitario, l.subtotal],
         );
         // El CHECK (cantidad >= 0) de la tabla es la última barrera contra stock negativo.
-        await db.query('UPDATE inventario SET cantidad = cantidad - $2 WHERE producto_id = $1', [l.producto_id, l.cantidad]);
-        await db.query(
-          `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, cantidad_anterior, cantidad_nueva, motivo, pedido_id)
-           VALUES ($1, 'venta', $2, $3, $4, $5, $6)`,
-          [l.producto_id, -l.cantidad, l.stock_disponible, l.stock_disponible - l.cantidad, `Pedido ${pedido.codigo}`, pedido.id],
-        );
+        await moverStock(db, { productoId: l.producto_id, tipo: 'venta', delta: -l.cantidad, motivo: `Pedido ${pedido.codigo}`, pedidoId: pedido.id });
       }
       return pedido.codigo as string;
     });
@@ -196,24 +191,16 @@ export async function cambiarEstadoPedido(codigo: string, cambios: { estado?: st
         throw new AppError(409, 'TRANSICION_INVALIDA', `No se puede pasar de "${p.estado}" a "${cambios.estado}"`);
       }
       if (cambios.estado === 'cancelado') {
-        const det = await db.query(
-          `SELECT d.producto_id, d.cantidad, i.cantidad AS stock FROM detalle_pedido d
-           JOIN inventario i ON i.producto_id = d.producto_id WHERE d.pedido_id = $1 ORDER BY d.producto_id FOR UPDATE OF i`,
-          [p.id],
-        );
+        // Orden por producto_id: dos cancelaciones simultáneas bloquean en el mismo orden (sin interbloqueo).
+        const det = await db.query('SELECT producto_id, cantidad FROM detalle_pedido WHERE pedido_id = $1 ORDER BY producto_id', [p.id]);
         for (const d of det.rows) {
-          await db.query('UPDATE inventario SET cantidad = cantidad + $2 WHERE producto_id = $1', [d.producto_id, d.cantidad]);
-          await db.query(
-            `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, cantidad_anterior, cantidad_nueva, motivo, pedido_id, asesor_id)
-             VALUES ($1, 'devolucion', $2, $3, $4, $5, $6, $7)`,
-            [d.producto_id, d.cantidad, d.stock, d.stock + d.cantidad, `Cancelación de ${codigo}`, p.id, asesorId],
-          );
+          await moverStock(db, { productoId: d.producto_id, tipo: 'devolucion', delta: d.cantidad, motivo: `Cancelación de ${codigo}`, pedidoId: p.id, asesorId });
         }
       }
       await db.query('UPDATE pedidos SET estado = $2 WHERE id = $1', [p.id, cambios.estado]);
     }
     if (cambios.estado_pago) await db.query('UPDATE pedidos SET estado_pago = $2 WHERE id = $1', [p.id, cambios.estado_pago]);
-  });
+  }, { usuarioId: asesorId });
   void registrarEvento('info', 'pedido_actualizado', `Pedido ${codigo} actualizado`, { codigo, ...cambios, asesor_id: asesorId });
   return obtenerPedido(codigo);
 }

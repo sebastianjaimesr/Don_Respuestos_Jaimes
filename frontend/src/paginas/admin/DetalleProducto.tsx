@@ -144,7 +144,7 @@ export default function DetalleProducto() {
 }
 
 function Compatibilidades({ producto, editable, onCambio }: { producto: Detalle; editable: boolean; onCambio: () => void }) {
-  const modelos = useCarga(() => apiAdmin<{ id: number; nombre: string }[]>('/admin/modelos'), []);
+  const modelos = useCarga(() => apiAdmin<{ id: number; nombre: string; fabricante?: string }[]>('/admin/modelos'), []);
   const [f, setF] = useState({ modelo_id: '', anio_desde: '', anio_hasta: '', verificada: true, fuente: '', notas: '' });
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -222,7 +222,7 @@ function Compatibilidades({ producto, editable, onCambio }: { producto: Detalle;
             </option>
             {modelos.datos?.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.nombre}
+                {m.fabricante ? `${m.fabricante} ${m.nombre}` : m.nombre}
               </option>
             ))}
           </Selector>

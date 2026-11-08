@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { pool, enTransaccion } from '../db';
+import { pool, enTransaccion, moverStock } from '../db';
 import { config } from '../config';
 import { AppError } from '../errores';
 import { h, ok, paginacion } from '../utils/http';
 import { requerirAuth, requerirRol } from '../middleware/auth';
 import { crearAsesor, iniciarSesion } from '../modulos/auth/servicio';
-import { CATEGORIAS } from '../modulos/catalogo/categorias';
+import { asegurarCategorias, categoriaPorClave, categoriasHoja } from '../modulos/catalogo/categorias';
 import { obtenerCotizacion } from '../modulos/cotizaciones/servicio';
 import { cambiarEstadoPedido, obtenerPedido } from '../modulos/pedidos/servicio';
 import { cambiarEstadoTransferencia } from '../modulos/escalamiento/servicio';
@@ -88,25 +88,83 @@ admin.get(
 // =====================================================================
 // Marcas y modelos
 // =====================================================================
-admin.get('/marcas', h(async (_req, res) => ok(res, (await pool.query('SELECT id, nombre, tipo, es_demo FROM marcas ORDER BY tipo DESC, nombre')).rows)));
+// Una marca es "original" cuando es la del fabricante de una moto (fabricante_moto_id).
+// Se devuelve `tipo` calculado para que el panel actual siga funcionando.
+admin.get(
+  '/marcas',
+  h(async (_req, res) =>
+    ok(
+      res,
+      (
+        await pool.query(
+          `SELECT m.id, m.nombre, CASE WHEN m.fabricante_moto_id IS NULL THEN 'generico' ELSE 'original' END AS tipo,
+                  m.fabricante_moto_id, f.nombre AS fabricante_moto, m.activo, m.es_demo
+           FROM marcas_repuesto m LEFT JOIN fabricantes_moto f ON f.id = m.fabricante_moto_id
+           ORDER BY (m.fabricante_moto_id IS NOT NULL) DESC, m.nombre`,
+        )
+      ).rows,
+    ),
+  ),
+);
 admin.post(
   '/marcas',
   soloAdmin,
   h(async (req, res) => {
-    const d = z.object({ nombre: z.string().trim().min(2).max(80), tipo: z.enum(['original', 'generico']) }).parse(req.body);
+    const d = z
+      .object({
+        nombre: z.string().trim().min(2).max(80),
+        tipo: z.enum(['original', 'generico']).default('generico'),
+        fabricante_moto_id: z.number().int().positive().nullable().optional(),
+      })
+      .parse(req.body);
+    let fabricanteId = d.fabricante_moto_id ?? null;
+    if (d.tipo === 'original' && !fabricanteId) {
+      const f = await pool.query('SELECT id FROM fabricantes_moto WHERE lower(nombre) = lower($1)', [d.nombre]);
+      fabricanteId = f.rows[0]?.id ?? null;
+      if (!fabricanteId) {
+        throw new AppError(400, 'FABRICANTE_REQUERIDO', 'Una marca original debe ser la de un fabricante de motos registrado (Yamaha, Honda, Bajaj…)');
+      }
+    }
     try {
-      ok(res, (await pool.query('INSERT INTO marcas (nombre, tipo) VALUES ($1, $2) RETURNING *', [d.nombre, d.tipo])).rows[0], 201);
+      await enTransaccion(async (db) => {
+        const { rows } = await db.query('INSERT INTO marcas_repuesto (nombre, fabricante_moto_id) VALUES ($1, $2) RETURNING *', [d.nombre, fabricanteId]);
+        ok(res, { ...rows[0], tipo: fabricanteId ? 'original' : 'generico' }, 201);
+      }, { usuarioId: req.usuario!.id });
     } catch (e) {
-      if ((e as { code?: string }).code === '23505') throw new AppError(409, 'MARCA_DUPLICADA', 'Ya existe una marca con ese nombre');
+      if ((e as { code?: string }).code === '23505') throw new AppError(409, 'MARCA_DUPLICADA', 'Ya existe una marca con ese nombre o para ese fabricante');
       throw e;
     }
   }),
 );
 
-admin.get('/categorias', (_req, res) => ok(res, CATEGORIAS.map(({ clave, etiqueta, requierePosicion, seguridad }) => ({ clave, etiqueta, requierePosicion, seguridad }))));
+admin.get(
+  '/categorias',
+  h(async (_req, res) => {
+    await asegurarCategorias();
+    ok(res, categoriasHoja().map(({ clave, etiqueta, requierePosicion, seguridad, padre }) => ({ clave, etiqueta, requierePosicion, seguridad, grupo: padre })));
+  }),
+);
 
-admin.get('/modelos', h(async (_req, res) => ok(res, (await pool.query('SELECT * FROM modelos_motocicleta ORDER BY nombre')).rows)));
+admin.get(
+  '/fabricantes',
+  h(async (_req, res) => ok(res, (await pool.query('SELECT id, nombre, slug, activo, orden FROM fabricantes_moto ORDER BY orden, nombre')).rows)),
+);
+
+admin.get(
+  '/modelos',
+  h(async (_req, res) =>
+    ok(
+      res,
+      (
+        await pool.query(
+          `SELECT mo.*, f.nombre AS fabricante FROM modelos_motocicleta mo JOIN fabricantes_moto f ON f.id = mo.fabricante_id ORDER BY f.nombre, mo.nombre`,
+        )
+      ).rows,
+    ),
+  ),
+);
 const esquemaModelo = z.object({
+  fabricante_id: z.number().int().positive(),
   nombre: z.string().trim().min(1).max(80),
   cilindraje_cc: z.number().int().positive().nullable().optional(),
   anio_inicio: z.number().int().min(1950).max(2100).nullable().optional(),
@@ -114,17 +172,31 @@ const esquemaModelo = z.object({
   alias: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   activo: z.boolean().default(true),
 });
+function erroresModelo(e: unknown): never {
+  const code = (e as { code?: string }).code;
+  if (code === '23505') throw new AppError(409, 'MODELO_DUPLICADO', 'Ese fabricante ya tiene un modelo con ese nombre');
+  if (code === '23503') throw new AppError(400, 'FABRICANTE_INVALIDO', 'El fabricante no existe');
+  throw e;
+}
 admin.post(
   '/modelos',
   soloAdmin,
   h(async (req, res) => {
     const d = esquemaModelo.parse(req.body);
     const alias = [...new Set(d.alias.map((a) => a.toLowerCase()))];
-    const { rows } = await pool.query(
-      'INSERT INTO modelos_motocicleta (nombre, cilindraje_cc, anio_inicio, anio_fin, alias, activo) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [d.nombre, d.cilindraje_cc ?? null, d.anio_inicio ?? null, d.anio_fin ?? null, alias, d.activo],
-    );
-    ok(res, rows[0], 201);
+    try {
+      const { rows } = await enTransaccion(
+        (db) =>
+          db.query(
+            'INSERT INTO modelos_motocicleta (fabricante_id, nombre, cilindraje_cc, anio_inicio, anio_fin, alias, activo) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+            [d.fabricante_id, d.nombre, d.cilindraje_cc ?? null, d.anio_inicio ?? null, d.anio_fin ?? null, alias, d.activo],
+          ),
+        { usuarioId: req.usuario!.id },
+      );
+      ok(res, rows[0], 201);
+    } catch (e) {
+      erroresModelo(e);
+    }
   }),
 );
 admin.put(
@@ -133,11 +205,20 @@ admin.put(
   h(async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id);
     const d = esquemaModelo.parse(req.body);
-    const { rows } = await pool.query(
-      'UPDATE modelos_motocicleta SET nombre=$2, cilindraje_cc=$3, anio_inicio=$4, anio_fin=$5, alias=$6, activo=$7 WHERE id=$1 RETURNING *',
-      [id, d.nombre, d.cilindraje_cc ?? null, d.anio_inicio ?? null, d.anio_fin ?? null, [...new Set(d.alias.map((a) => a.toLowerCase()))], d.activo],
-    );
-    if (!rows[0]) throw new AppError(404, 'NO_ENCONTRADO', 'Modelo no encontrado');
+    let rows;
+    try {
+      ({ rows } = await enTransaccion(
+        (db) =>
+          db.query(
+            'UPDATE modelos_motocicleta SET fabricante_id=$2, nombre=$3, cilindraje_cc=$4, anio_inicio=$5, anio_fin=$6, alias=$7, activo=$8 WHERE id=$1 RETURNING *',
+            [id, d.fabricante_id, d.nombre, d.cilindraje_cc ?? null, d.anio_inicio ?? null, d.anio_fin ?? null, [...new Set(d.alias.map((a) => a.toLowerCase()))], d.activo],
+          ),
+        { usuarioId: req.usuario!.id },
+      ));
+    } catch (e) {
+      erroresModelo(e);
+    }
+    if (!rows?.[0]) throw new AppError(404, 'NO_ENCONTRADO', 'Modelo no encontrado');
     ok(res, rows[0]);
   }),
 );
@@ -153,25 +234,29 @@ admin.get(
       .object({
         q: z.string().max(80).optional(),
         categoria: z.string().max(40).optional(),
-        tipo: z.enum(['original', 'generico']).optional(),
+        tipo: z.enum(['original', 'generico', 'alternativo']).optional(),
         estado_stock: z.enum(['disponible', 'stock_bajo', 'agotado']).optional(),
         activo: z.enum(['true', 'false']).optional(),
       })
       .parse(req.query);
     const params = [f.q ? `%${f.q}%` : null, f.categoria ?? null, f.tipo ?? null, f.estado_stock ?? null, f.activo ? f.activo === 'true' : null];
-    const where = `WHERE ($1::text IS NULL OR p.nombre ILIKE $1 OR p.referencia ILIKE $1)
-        AND ($2::text IS NULL OR p.categoria = $2) AND ($3::text IS NULL OR p.tipo = $3)
+    const where = `WHERE ($1::text IS NULL OR p.nombre ILIKE $1 OR p.sku ILIKE $1 OR p.referencia ILIKE $1 OR p.codigo_barras ILIKE $1)
+        AND ($2::text IS NULL OR cat.slug = $2) AND ($3::text IS NULL OR p.tipo = $3)
         AND ($4::text IS NULL OR e.estado = $4) AND ($5::boolean IS NULL OR p.activo = $5)`;
     const [lista, total] = await Promise.all([
       pool.query(
-        `SELECT p.id, p.referencia, p.nombre, p.categoria, p.posicion, p.tipo, p.precio, p.activo, p.es_demo, ma.nombre AS marca,
-                e.cantidad, e.stock_minimo, e.estado,
+        `SELECT p.id, p.sku AS referencia, p.sku, p.referencia AS referencia_fabricante, p.nombre, cat.slug AS categoria, p.posicion, p.tipo,
+                p.precio, p.activo, p.es_demo, ma.nombre AS marca, e.cantidad, e.stock_minimo, e.estado,
                 (SELECT COUNT(*) FROM compatibilidades c WHERE c.producto_id = p.id)::int AS num_compatibilidades
-         FROM productos p JOIN marcas ma ON ma.id = p.marca_id JOIN v_estado_inventario e ON e.producto_id = p.id
-         ${where} ORDER BY p.nombre, p.referencia LIMIT ${tamano} OFFSET ${offset}`,
+         FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN marcas_repuesto ma ON ma.id = p.marca_id
+         JOIN v_estado_inventario e ON e.producto_id = p.id
+         ${where} ORDER BY p.nombre, p.sku LIMIT ${tamano} OFFSET ${offset}`,
         params,
       ),
-      pool.query(`SELECT COUNT(*)::int AS n FROM productos p JOIN v_estado_inventario e ON e.producto_id = p.id ${where}`, params),
+      pool.query(
+        `SELECT COUNT(*)::int AS n FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN v_estado_inventario e ON e.producto_id = p.id ${where}`,
+        params,
+      ),
     ]);
     ok(res, { items: lista.rows, total: total.rows[0].n, pagina, tamano });
   }),
@@ -182,28 +267,33 @@ admin.get(
   h(async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id);
     const { rows } = await pool.query(
-      `SELECT p.*, ma.nombre AS marca, i.cantidad, i.stock_minimo, i.ubicacion, i.tiempo_abastecimiento_dias, e.estado AS estado_stock
-       FROM productos p JOIN marcas ma ON ma.id = p.marca_id LEFT JOIN inventario i ON i.producto_id = p.id JOIN v_estado_inventario e ON e.producto_id = p.id
+      `SELECT p.*, cat.slug AS categoria, ma.nombre AS marca, i.cantidad, i.stock_minimo, i.ubicacion, i.tiempo_abastecimiento_dias, e.estado AS estado_stock
+       FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN marcas_repuesto ma ON ma.id = p.marca_id LEFT JOIN inventario i ON i.producto_id = p.id JOIN v_estado_inventario e ON e.producto_id = p.id
        WHERE p.id = $1`,
       [id],
     );
     if (!rows[0]) throw new AppError(404, 'NO_ENCONTRADO', 'Producto no encontrado');
     const compat = await pool.query(
-      `SELECT c.*, mo.nombre AS modelo FROM compatibilidades c JOIN modelos_motocicleta mo ON mo.id = c.modelo_id WHERE c.producto_id = $1 ORDER BY mo.nombre, c.anio_desde`,
+      `SELECT c.*, mo.nombre AS modelo, f.nombre AS fabricante, v.nombre AS version
+       FROM compatibilidades c JOIN modelos_motocicleta mo ON mo.id = c.modelo_id JOIN fabricantes_moto f ON f.id = mo.fabricante_id
+       LEFT JOIN versiones_moto v ON v.id = c.version_id
+       WHERE c.producto_id = $1 ORDER BY f.nombre, mo.nombre, c.anio_desde`,
       [id],
     );
     ok(res, { ...rows[0], compatibilidades: compat.rows });
   }),
 );
 
-const claves = CATEGORIAS.map((c) => c.clave) as [string, ...string[]];
 const esquemaProducto = z.object({
+  /** Código interno (SKU). Se guarda en mayúsculas con guiones en vez de espacios. */
   referencia: z.string().trim().min(2).max(60).regex(/^[A-Za-z0-9._\- ]+$/, 'Solo letras, números, punto, guion y espacio'),
   nombre: z.string().trim().min(2).max(160),
   descripcion: z.string().trim().max(2000).nullable().optional(),
-  categoria: z.enum(claves),
+  categoria: z.string().trim().min(2).max(40),
   posicion: z.enum(['delantero', 'trasero']).nullable().optional(),
   marca_id: z.number().int().positive(),
+  /** Solo para marcas que no son de un fabricante de motos. */
+  tipo: z.enum(['generico', 'alternativo']).optional(),
   precio: z.number().positive().max(99_999_999).multipleOf(0.01).nullable(),
   activo: z.boolean().default(true),
   stock_minimo: z.number().int().min(0).max(100000).default(2),
@@ -211,10 +301,27 @@ const esquemaProducto = z.object({
   tiempo_abastecimiento_dias: z.number().int().positive().max(365).nullable().optional(),
 });
 
-async function tipoDeMarca(db: { query: typeof pool.query }, marcaId: number): Promise<'original' | 'generico'> {
-  const { rows } = await db.query('SELECT tipo FROM marcas WHERE id = $1', [marcaId]);
+const aSku = (ref: string) => ref.trim().toUpperCase().replace(/\s+/g, '-');
+
+/** Resuelve la categoría (debe ser una categoría hoja activa) y el tipo según la marca. */
+async function resolverProducto(db: { query: typeof pool.query }, d: z.infer<typeof esquemaProducto>) {
+  await asegurarCategorias();
+  const cat = categoriaPorClave(d.categoria);
+  if (!cat || cat.padre === null) {
+    throw new AppError(400, 'VALIDACION', 'Datos inválidos', [{ campo: 'categoria', mensaje: 'Elige una categoría válida' }]);
+  }
+  const { rows } = await db.query('SELECT fabricante_moto_id FROM marcas_repuesto WHERE id = $1', [d.marca_id]);
   if (!rows[0]) throw new AppError(400, 'MARCA_INVALIDA', 'La marca no existe');
-  return rows[0].tipo;
+  // El tipo lo define la marca: la del fabricante de la moto es original; las demás, genérico o alternativo.
+  const tipo = rows[0].fabricante_moto_id ? 'original' : (d.tipo ?? 'generico');
+  return { categoriaId: cat.id, tipo };
+}
+
+function erroresProducto(e: unknown): never {
+  const err = e as { code?: string; constraint?: string };
+  if (err.code === '23505') throw new AppError(409, 'REFERENCIA_DUPLICADA', 'Ya existe un producto con esa referencia');
+  if (err.code === '23514' && err.constraint === 'ck_producto_original_oem') throw new AppError(400, 'TIPO_INVALIDO', (e as Error).message);
+  throw e;
 }
 
 admin.post(
@@ -224,12 +331,11 @@ admin.post(
     const d = esquemaProducto.parse(req.body);
     try {
       const prod = await enTransaccion(async (db) => {
-        // El tipo (original/genérico) lo define la marca: no se pueden mezclar.
-        const tipo = await tipoDeMarca(db, d.marca_id);
+        const { categoriaId, tipo } = await resolverProducto(db, d);
         const { rows } = await db.query(
-          `INSERT INTO productos (referencia, nombre, descripcion, categoria, posicion, marca_id, tipo, precio, activo)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-          [d.referencia.toUpperCase(), d.nombre, d.descripcion ?? null, d.categoria, d.posicion ?? null, d.marca_id, tipo, d.precio, d.activo],
+          `INSERT INTO productos (sku, referencia, nombre, descripcion, categoria_id, posicion, marca_id, tipo, precio, activo)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *, $11::text AS categoria`,
+          [aSku(d.referencia), d.referencia.trim().toUpperCase(), d.nombre, d.descripcion ?? null, categoriaId, d.posicion ?? null, d.marca_id, tipo, d.precio, d.activo, d.categoria],
         );
         // El stock inicial es 0: las unidades se cargan con un movimiento de "entrada"
         await db.query('INSERT INTO inventario (producto_id, cantidad, stock_minimo, ubicacion, tiempo_abastecimiento_dias) VALUES ($1, 0, $2, $3, $4)', [
@@ -239,12 +345,11 @@ admin.post(
           d.tiempo_abastecimiento_dias ?? null,
         ]);
         return rows[0];
-      });
-      void registrarEvento('info', 'producto_creado', `Producto ${prod.referencia} creado`, { producto_id: prod.id, asesor_id: req.usuario!.id });
+      }, { usuarioId: req.usuario!.id });
+      void registrarEvento('info', 'producto_creado', `Producto ${prod.sku} creado`, { producto_id: prod.id, asesor_id: req.usuario!.id });
       ok(res, prod, 201);
     } catch (e) {
-      if ((e as { code?: string }).code === '23505') throw new AppError(409, 'REFERENCIA_DUPLICADA', 'Ya existe un producto con esa referencia');
-      throw e;
+      erroresProducto(e);
     }
   }),
 );
@@ -259,11 +364,11 @@ admin.put(
       const r = await enTransaccion(async (db) => {
         const antes = (await db.query('SELECT precio FROM productos WHERE id = $1 FOR UPDATE', [id])).rows[0];
         if (!antes) throw new AppError(404, 'NO_ENCONTRADO', 'Producto no encontrado');
-        const tipo = await tipoDeMarca(db, d.marca_id);
+        const { categoriaId, tipo } = await resolverProducto(db, d);
         const { rows } = await db.query(
-          `UPDATE productos SET referencia=$2, nombre=$3, descripcion=$4, categoria=$5, posicion=$6, marca_id=$7, tipo=$8, precio=$9, activo=$10
-           WHERE id=$1 RETURNING *`,
-          [id, d.referencia.toUpperCase(), d.nombre, d.descripcion ?? null, d.categoria, d.posicion ?? null, d.marca_id, tipo, d.precio, d.activo],
+          `UPDATE productos SET sku=$2, referencia=$3, nombre=$4, descripcion=$5, categoria_id=$6, posicion=$7, marca_id=$8, tipo=$9, precio=$10, activo=$11
+           WHERE id=$1 RETURNING *, $12::text AS categoria`,
+          [id, aSku(d.referencia), d.referencia.trim().toUpperCase(), d.nombre, d.descripcion ?? null, categoriaId, d.posicion ?? null, d.marca_id, tipo, d.precio, d.activo, d.categoria],
         );
         await db.query('UPDATE inventario SET stock_minimo=$2, ubicacion=$3, tiempo_abastecimiento_dias=$4 WHERE producto_id=$1', [
           id,
@@ -272,9 +377,9 @@ admin.put(
           d.tiempo_abastecimiento_dias ?? null,
         ]);
         return { prod: rows[0], precioAnterior: antes.precio };
-      });
+      }, { usuarioId: req.usuario!.id, origen: 'manual' });
       if (r.precioAnterior !== r.prod.precio) {
-        void registrarEvento('info', 'precio_actualizado', `Precio de ${r.prod.referencia} actualizado`, {
+        void registrarEvento('info', 'precio_actualizado', `Precio de ${r.prod.sku} actualizado`, {
           producto_id: id,
           anterior: r.precioAnterior,
           nuevo: r.prod.precio,
@@ -283,8 +388,7 @@ admin.put(
       }
       ok(res, r.prod);
     } catch (e) {
-      if ((e as { code?: string }).code === '23505') throw new AppError(409, 'REFERENCIA_DUPLICADA', 'Ya existe un producto con esa referencia');
-      throw e;
+      erroresProducto(e);
     }
   }),
 );
@@ -293,6 +397,7 @@ admin.put(
 const esquemaCompat = z
   .object({
     modelo_id: z.number().int().positive(),
+    version_id: z.number().int().positive().nullable().optional(),
     anio_desde: z.number().int().min(1950).max(2100),
     anio_hasta: z.number().int().min(1950).max(2100),
     verificada: z.boolean(),
@@ -309,16 +414,20 @@ admin.post(
     const id = z.coerce.number().int().parse(req.params.id);
     const d = esquemaCompat.parse(req.body);
     try {
-      const { rows } = await pool.query(
-        'INSERT INTO compatibilidades (producto_id, modelo_id, anio_desde, anio_hasta, verificada, fuente, notas) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-        [id, d.modelo_id, d.anio_desde, d.anio_hasta, d.verificada, d.fuente ?? null, d.notas ?? null],
+      const { rows } = await enTransaccion(
+        (db) =>
+          db.query(
+            'INSERT INTO compatibilidades (producto_id, modelo_id, version_id, anio_desde, anio_hasta, verificada, fuente, notas) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+            [id, d.modelo_id, d.version_id ?? null, d.anio_desde, d.anio_hasta, d.verificada, d.fuente ?? null, d.notas ?? null],
+          ),
+        { usuarioId: req.usuario!.id },
       );
       void registrarEvento('info', 'compatibilidad_creada', 'Compatibilidad registrada', { producto_id: id, modelo_id: d.modelo_id, asesor_id: req.usuario!.id });
       ok(res, rows[0], 201);
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code === '23505') throw new AppError(409, 'COMPATIBILIDAD_DUPLICADA', 'Esa compatibilidad ya existe');
-      if (code === '23503') throw new AppError(400, 'REFERENCIA_INVALIDA', 'El producto o el modelo no existe');
+      if (code === '23503') throw new AppError(400, 'REFERENCIA_INVALIDA', 'El producto, el modelo o la versión no existe (la versión debe ser de ese modelo)');
       throw e;
     }
   }),
@@ -330,9 +439,13 @@ admin.put(
   h(async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id);
     const d = esquemaCompat.parse(req.body);
-    const { rows } = await pool.query(
-      'UPDATE compatibilidades SET modelo_id=$2, anio_desde=$3, anio_hasta=$4, verificada=$5, fuente=$6, notas=$7 WHERE id=$1 RETURNING *',
-      [id, d.modelo_id, d.anio_desde, d.anio_hasta, d.verificada, d.fuente ?? null, d.notas ?? null],
+    const { rows } = await enTransaccion(
+      (db) =>
+        db.query(
+          'UPDATE compatibilidades SET modelo_id=$2, version_id=$3, anio_desde=$4, anio_hasta=$5, verificada=$6, fuente=$7, notas=$8 WHERE id=$1 RETURNING *',
+          [id, d.modelo_id, d.version_id ?? null, d.anio_desde, d.anio_hasta, d.verificada, d.fuente ?? null, d.notas ?? null],
+        ),
+      { usuarioId: req.usuario!.id },
     );
     if (!rows[0]) throw new AppError(404, 'NO_ENCONTRADO', 'Compatibilidad no encontrada');
     ok(res, rows[0]);
@@ -344,7 +457,7 @@ admin.delete(
   soloAdmin,
   h(async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id);
-    const { rowCount } = await pool.query('DELETE FROM compatibilidades WHERE id = $1', [id]);
+    const { rowCount } = await enTransaccion((db) => db.query('DELETE FROM compatibilidades WHERE id = $1', [id]), { usuarioId: req.usuario!.id });
     if (!rowCount) throw new AppError(404, 'NO_ENCONTRADO', 'Compatibilidad no encontrada');
     void registrarEvento('info', 'compatibilidad_eliminada', 'Compatibilidad eliminada', { compatibilidad_id: id, asesor_id: req.usuario!.id });
     ok(res, { eliminada: true });
@@ -358,7 +471,7 @@ admin.get(
   '/inventario/alertas',
   h(async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT p.id, p.referencia, p.nombre, p.tipo, p.es_demo, e.cantidad, e.stock_minimo, e.estado, e.tiempo_abastecimiento_dias
+      `SELECT p.id, p.sku AS referencia, p.nombre, p.tipo, p.es_demo, e.cantidad, e.stock_minimo, e.estado, e.tiempo_abastecimiento_dias
        FROM productos p JOIN v_estado_inventario e ON e.producto_id = p.id
        WHERE p.activo AND e.estado IN ('agotado', 'stock_bajo')
        ORDER BY (e.estado = 'agotado') DESC, e.cantidad, p.nombre`,
@@ -388,14 +501,8 @@ admin.post(
       if (delta === 0) throw new AppError(400, 'SIN_CAMBIO', 'El ajuste no cambia la cantidad');
       const nueva = anterior + delta;
       if (nueva < 0) throw new AppError(409, 'INVENTARIO_NEGATIVO', `No puedes sacar ${-delta} unidades: solo hay ${anterior}`);
-      await db.query('UPDATE inventario SET cantidad = $2 WHERE producto_id = $1', [productoId, nueva]);
-      const mov = await db.query(
-        `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, cantidad_anterior, cantidad_nueva, motivo, asesor_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [productoId, m.tipo, delta, anterior, nueva, m.motivo, req.usuario!.id],
-      );
-      return mov.rows[0];
-    });
+      return moverStock(db, { productoId, tipo: m.tipo, delta, motivo: m.motivo, asesorId: req.usuario!.id });
+    }, { usuarioId: req.usuario!.id });
     void registrarEvento('info', 'inventario_movimiento', `Movimiento de inventario (${m.tipo})`, { producto_id: productoId, cantidad: r.cantidad, asesor_id: req.usuario!.id });
     ok(res, r, 201);
   }),
