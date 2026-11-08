@@ -26,6 +26,7 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - [x] Hosting de demostración: frontend en GitHub Pages y backend + PostgreSQL en Render plan gratis ([DESPLIEGUE_RENDER.md](DESPLIEGUE_RENDER.md)).
 - [ ] Para producción: plan pago de Render (o Railway/VPS) con PostgreSQL con backups diarios; el plan gratis se duerme y su base de datos vence.
 - [ ] HTTPS obligatorio en todos los dominios (también en n8n).
+- [ ] **Dominio propio para tienda y API** (por ejemplo `tienda.midominio.com` y `api.midominio.com`): con GitHub Pages + Render en dominios distintos, Safari bloquea la cookie de sesión del cliente y las cuentas de cliente no funcionan ahí. Carrito y pedidos sí funcionan.
 - [ ] `NODE_ENV=production`, `CORS_ORIGENES` con el dominio real, `CONFIAR_PROXY` según el proxy usado.
 - [ ] Secretos nuevos y largos para `JWT_SECRET` y `WEBHOOK_SECRET` (nunca los de desarrollo).
 - [ ] Usuario de PostgreSQL de la aplicación sin permisos de superusuario.

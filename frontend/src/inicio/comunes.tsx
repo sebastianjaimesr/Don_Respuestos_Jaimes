@@ -16,7 +16,7 @@ export function EncabezadoSeccion({ etiqueta, titulo, texto, centrado = true }: 
   return (
     <Revelar className={`flex max-w-2xl flex-col gap-4 ${centrado ? 'mx-auto items-center text-center' : 'items-start'}`}>
       <span className="inline-flex items-center gap-2 rounded-full border border-electrico-400/25 bg-electrico-500/10 px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-electrico-300 uppercase">
-        <span className="h-1.5 w-1.5 rounded-full bg-electrico-400 shadow-[0_0_10px_2px_rgba(77,141,255,0.8)]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-electrico-400 shadow-[0_0_10px_2px_rgba(92,140,255,0.8)]" />
         {etiqueta}
       </span>
       <h2 className="font-display text-3xl leading-tight font-semibold tracking-tight text-white sm:text-4xl lg:text-[44px]">{titulo}</h2>
@@ -41,7 +41,7 @@ export function BotonPrincipal({
 }) {
   const estilo =
     variante === 'primario'
-      ? 'bg-gradient-to-br from-electrico-400 via-electrico-500 to-electrico-600 text-white shadow-[0_14px_40px_-12px_rgba(37,99,255,0.95)] hover:shadow-[0_18px_50px_-10px_rgba(37,99,255,1)]'
+      ? 'bg-gradient-to-br from-electrico-400 via-electrico-500 to-electrico-600 text-white shadow-[0_14px_40px_-12px_rgba(47,107,255,0.95)] hover:shadow-[0_18px_50px_-10px_rgba(47,107,255,1)]'
       : 'vidrio text-white hover:border-electrico-400/50 hover:bg-white/10';
   const clase = `group relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-6 py-3.5 text-[15px] font-semibold transition duration-300 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] ${estilo} ${className}`;
   const interior = (
@@ -74,15 +74,15 @@ export function Logo({ compacto = false }: { compacto?: boolean }) {
       <svg viewBox="0 0 40 40" className="h-9 w-9 shrink-0" aria-hidden>
         <defs>
           <linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#8fb6ff" />
-            <stop offset="0.5" stopColor="#2563ff" />
-            <stop offset="1" stopColor="#1546f0" />
+            <stop offset="0" stopColor="#9dbbff" />
+            <stop offset="0.5" stopColor="#2f6bff" />
+            <stop offset="1" stopColor="#1f55e6" />
           </linearGradient>
         </defs>
         {/* engranaje/disco estilizado con las iniciales */}
         <path d="M20 2.5 34.5 10.8v18.4L20 37.5 5.5 29.2V10.8Z" fill="url(#logo-g)" />
         <path d="M20 6.5 31 12.8v14.4L20 33.5 9 27.2V12.8Z" fill="#070b16" />
-        <text x="20" y="24.6" textAnchor="middle" fontFamily="Sora Variable, Inter Variable, sans-serif" fontWeight="700" fontSize="12.5" letterSpacing="-0.4" fill="#fff">D<tspan fill="#8fb6ff">J</tspan></text>
+        <text x="20" y="24.6" textAnchor="middle" fontFamily="Sora Variable, Inter Variable, sans-serif" fontWeight="700" fontSize="12.5" letterSpacing="-0.4" fill="#fff">D<tspan fill="#9dbbff">J</tspan></text>
       </svg>
       {!compacto && (
         <span className="flex flex-col leading-none">

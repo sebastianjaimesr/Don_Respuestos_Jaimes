@@ -21,26 +21,38 @@ export const sesion = {
   borrar: () => sessionStorage.removeItem(CLAVE_TOKEN),
 };
 
+/**
+ * Token CSRF de la sesión de CLIENTE (cookie HttpOnly `drj_cliente`). Vive solo en
+ * memoria: al recargar se pide de nuevo a /clientes/yo. Se envía en las escrituras.
+ */
+let csrfCliente: string | null = null;
+export const fijarCsrfCliente = (t: string | null) => (csrfCliente = t);
+
 let alExpirar: (() => void) | null = null;
 export const registrarAlExpirar = (fn: () => void) => (alExpirar = fn);
 
 // El backend en un plan gratuito se "duerme" y tarda en despertar: por eso el límite es amplio.
 const ESPERA_MAXIMA_MS = 70_000;
 
-export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; auth?: boolean; esperaMs?: number } = {}): Promise<T> {
+export async function api<T>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown; auth?: boolean; esperaMs?: number; encabezados?: Record<string, string> } = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opciones.cuerpo !== undefined) headers['Content-Type'] = 'application/json';
   if (opciones.auth) {
     const t = sesion.token();
     if (t) headers.Authorization = `Bearer ${t}`;
   }
+  const metodo = opciones.metodo ?? 'GET';
+  if (!opciones.auth && csrfCliente && metodo !== 'GET') headers['X-CSRF-Token'] = csrfCliente;
+  if (opciones.encabezados) Object.assign(headers, opciones.encabezados);
   let res: Response;
   const control = new AbortController();
   const limite = setTimeout(() => control.abort(), opciones.esperaMs ?? ESPERA_MAXIMA_MS);
   try {
     res = await fetch(BASE + ruta, {
-      method: opciones.metodo ?? 'GET',
+      method: metodo,
       headers,
+      // La sesión de cliente viaja en una cookie HttpOnly (el frontend y el backend están en dominios distintos)
+      credentials: 'include',
       body: opciones.cuerpo !== undefined ? JSON.stringify(opciones.cuerpo) : undefined,
       signal: control.signal,
     });

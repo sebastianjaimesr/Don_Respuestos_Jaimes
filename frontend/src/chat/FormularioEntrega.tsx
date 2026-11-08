@@ -12,7 +12,7 @@ export function FormularioEntrega({ valores, onEnviar }: { valores: Record<strin
     onEnviar(datos);
   };
   return (
-    <form onSubmit={enviar} aria-label="Datos de entrega" className="w-full rounded-2xl border border-electrico-400/25 bg-noche-900/70 p-4 shadow-[0_20px_50px_-25px_rgba(37,99,255,0.7)]">
+    <form onSubmit={enviar} aria-label="Datos de entrega" className="w-full rounded-2xl border border-electrico-400/25 bg-noche-900/70 p-4 shadow-[0_20px_50px_-25px_rgba(47,107,255,0.7)]">
       <div className="mb-4 flex items-center gap-2.5">
         <span aria-hidden className="grid h-9 w-9 place-items-center rounded-full bg-electrico-500/20 text-electrico-300 ring-1 ring-electrico-400/30">
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">

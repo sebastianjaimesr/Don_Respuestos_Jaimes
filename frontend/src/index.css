@@ -9,15 +9,18 @@
   --color-marca-900: #172554;
 
   /* Identidad premium (página pública y asistente) */
-  --color-noche-950: #04060c;
-  --color-noche-900: #070b16;
-  --color-noche-800: #0c1324;
-  --color-noche-700: #131c33;
-  --color-electrico-300: #8fb6ff;
-  --color-electrico-400: #4d8dff;
-  --color-electrico-500: #2563ff;
-  --color-electrico-600: #1546f0;
-  --color-cian-400: #22d3ee;
+  /* Paleta de la marca: fondo #05060A, azul eléctrico #2F6BFF, azul secundario #00D4FF */
+  --color-noche-950: #05060a;
+  --color-noche-900: #0a0d16;
+  --color-noche-800: #10152a;
+  --color-noche-700: #18203a;
+  --color-electrico-300: #9dbbff;
+  --color-electrico-400: #5c8cff;
+  --color-electrico-500: #2f6bff;
+  --color-electrico-600: #1f55e6;
+  --color-cian-300: #66e6ff;
+  --color-cian-400: #00d4ff;
+  --color-gris-tec: #8a94a6;
 
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Sora Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
@@ -53,7 +56,7 @@ body { @apply bg-slate-50 text-slate-900 antialiased; }
 
 /* Texto con degradado azul eléctrico */
 @utility texto-electrico {
-  background: linear-gradient(100deg, #ffffff 10%, #a9c6ff 45%, #3d7bff 85%);
+  background: linear-gradient(100deg, #ffffff 10%, #a9c6ff 45%, #2f6bff 85%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

@@ -456,36 +456,37 @@ stateDiagram-v2
 
 ### 11.1 Rutas
 
+> **Estado (fase 3):** implementado. Las páginas de la tienda (menos la portada) se descargan aparte con `lazy()`.
+
 | Ruta | Página |
 |---|---|
-| `/` | Portada: "¿QUÉ NECESITAS PARA TU MOTO?", buscador, selector de moto, accesos rápidos, marcas, destacados, confianza |
-| `/catalogo`, `/catalogo/:categoria` | Catálogo con filtros en la URL (se pueden compartir) |
-| `/producto/:slug` | Galería, datos, compatibilidad, stock, relacionados, comprar, preguntar a Jaimes AI |
-| `/carrito`, `/checkout`, `/pedido/:codigo` | Compra |
-| `/cuenta`, `/cuenta/pedidos`, `/cuenta/favoritos`, `/ingresar` | Cliente |
+| `/` | Portada: "¿QUÉ NECESITAS PARA TU MOTO?", buscador con sugerencias, selector de moto (marca → modelo → año), marcas, categorías, destacados, Jaimes AI |
+| `/catalogo` | Catálogo con filtros en la URL (se pueden compartir): `q`, `categoria`, `fabricante`, `modelo`, `anio`, `tipo`, `disponible`, `precio_min`, `precio_max`, `orden`, `pagina` |
+| `/producto/:slug` | Fotos (o ilustración marcada como tal), precio y promoción, disponibilidad, compatibilidades verificadas / sin verificar, especificaciones, aviso de pieza de seguridad, cantidad, favoritos, relacionados |
+| `/carrito`, `/checkout` | Carrito del servidor y confirmación del pedido (no cobra nada: pago "pendiente") |
+| `/pedido/:codigo`, `/pedido` | Confirmación con botón de WhatsApp (solo si el número está configurado) y consulta con código + celular |
+| `/ingresar`, `/cuenta` | Ingreso / registro y cuenta del cliente (pedidos, favoritos, cerrar sesión) |
 | `/asistente` | Jaimes AI a pantalla completa (`/chat` redirige aquí) |
-| `/admin/*` | Panel (carga diferida, tema oscuro con los mismos tokens) |
+| `/admin/*` | Panel (carga diferida) |
 
-La moto elegida en el selector se guarda en la URL y en `localStorage` como preferencia de interfaz (no como datos de negocio) y filtra catálogo, destacados y Jaimes AI.
+La moto elegida se guarda en `localStorage` (`drj_moto`) solo como preferencia de interfaz; el catálogo la ofrece como filtro y la ficha de producto avisa si no hay compatibilidad registrada con ella. Del carrito el navegador solo recuerda el id (`drj_carrito`): precios, stock y promociones se recalculan en el servidor.
 
 ### 11.2 Estructura
 
 ```
 frontend/src/
-  app/            router, proveedores (Query, sesión, moto elegida), layout público
-  compartido/     ui/ (botón, tarjeta, modal, tabla, estados vacío/carga/error), api/, formato/, hooks/
-  tienda/
-    inicio/       hero, buscador, selector de moto, marcas, destacados
-    catalogo/     filtros, grilla, orden, paginación
-    producto/     galería, compatibilidad, relacionados
-    carrito/      carrito y checkout
-    cuenta/       ingreso, pedidos, favoritos
-  asistente/      JaimesAI (flotante y expandido), mensajes, tarjetas, sugerencias
-  admin/          dashboard, productos, inventario, compras, importación, ventas, configuración
-  estilos/        tokens.css (paleta), animaciones
+  api/            cliente (fetch + CSRF), tienda.ts (tipos y llamadas públicas), auth, formato
+  tienda/         estado.tsx (carrito, moto, sesión, favoritos), ui.tsx, LayoutTienda, Buscador, SelectorMoto
+    catalogo/     PaginaCatalogo (filtros, chips, orden, paginación)
+    producto/     PaginaProducto
+    carrito/      PaginaCarrito, PaginaCheckout, PaginaPedido
+    cuenta/       PaginaIngresar, PaginaCuenta
+  inicio/         portada (Hero, Secciones, imágenes)
+  chat/           Jaimes AI (panel y página completa)
+  paginas/admin/  panel
 ```
 
-El código actual se mueve a esta estructura sin cambiar su lógica: `inicio/` → `tienda/inicio/`, `chat/` → `asistente/`, `paginas/admin/` → `admin/`, `componentes/ui.tsx` se parte en `compartido/ui/`.
+**Sesión de cliente entre dominios:** si la tienda (GitHub Pages) y la API (Render) están en dominios distintos, Safari y algunos navegadores bloquean la cookie de sesión de terceros. El carrito y la compra funcionan igual (no usan cookie); el ingreso de clientes necesita que ambos queden bajo el mismo dominio (por ejemplo `tienda.midominio.com` y `api.midominio.com`). Ver PENDIENTES_PRODUCCION.
 
 ### 11.3 Identidad visual
 
