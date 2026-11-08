@@ -60,7 +60,7 @@ r.get(
   h(async (req, res) => {
     const id = z.coerce.number().int().parse(req.params.id);
     const { rows } = await pool.query(
-      `SELECT p.*, cat.slug AS categoria, ma.nombre AS marca, i.cantidad, i.stock_minimo, i.ubicacion, i.tiempo_abastecimiento_dias, e.estado AS estado_stock
+      `SELECT p.*, cat.slug AS categoria, cat.nombre AS categoria_nombre, ma.nombre AS marca, i.cantidad, i.stock_minimo, i.ubicacion, i.tiempo_abastecimiento_dias, e.estado AS estado_stock
        FROM productos p JOIN categorias cat ON cat.id = p.categoria_id JOIN marcas_repuesto ma ON ma.id = p.marca_id LEFT JOIN inventario i ON i.producto_id = p.id JOIN v_estado_inventario e ON e.producto_id = p.id
        WHERE p.id = $1`,
       [id],

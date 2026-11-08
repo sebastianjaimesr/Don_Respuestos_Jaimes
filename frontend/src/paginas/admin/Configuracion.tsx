@@ -34,7 +34,7 @@ function desdeTexto(clave: string, t: string): unknown {
 }
 
 export default function Configuracion() {
-  const { puede } = useAuth();
+  const { tiene } = useAuth();
   const cfg = useCarga(() => apiAdmin<Item[]>('/admin/configuracion'), []);
   return (
     <>
@@ -50,7 +50,7 @@ export default function Configuracion() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {cfg.datos.map((i) => (
-            <FilaConfig key={i.clave} item={i} editable={puede('admin')} onGuardado={cfg.recargar} />
+            <FilaConfig key={i.clave} item={i} editable={tiene('configuracion.editar')} onGuardado={cfg.recargar} />
           ))}
         </div>
       )}
@@ -84,7 +84,7 @@ function FilaConfig({ item, editable, onGuardado }: { item: Item; editable: bool
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="font-medium">{item.descripcion}</p>
-            <p className="font-mono text-xs text-slate-500">{item.clave}</p>
+            <p className="font-mono text-xs text-gris-tec">{item.clave}</p>
           </div>
           {item.confirmado ? <Insignia color="verde" texto="Confirmado" /> : <InsigniaPendiente />}
         </div>
@@ -97,7 +97,7 @@ function FilaConfig({ item, editable, onGuardado }: { item: Item; editable: bool
           onChange={(e) => setTexto(e.target.value)}
           disabled={!editable}
           placeholder={LISTAS.includes(item.clave) ? 'Separados por coma' : NUMEROS.includes(item.clave) ? 'Número (COP / días)' : 'Pendiente de confirmar'}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"
+          className="rounded-lg border border-white/15 px-3 py-2 text-sm disabled:bg-white/[0.03]"
         />
         {editable && (
           <div className="flex flex-wrap items-center justify-between gap-2">

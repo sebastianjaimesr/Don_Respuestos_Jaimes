@@ -4,6 +4,9 @@ import { config } from './config';
 // NUMERIC llega como string: así no perdemos precisión con el dinero.
 // BIGINT (COUNT, BIGSERIAL) lo convertimos a número porque nuestros valores son pequeños.
 types.setTypeParser(20, (v) => parseInt(v, 10));
+// DATE (sin hora) llega tal cual, "AAAA-MM-DD": si se convierte a Date queda a medianoche UTC
+// y en Colombia se ve como el día anterior.
+types.setTypeParser(1082, (v) => v);
 
 export const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10 });
 

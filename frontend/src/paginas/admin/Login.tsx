@@ -29,13 +29,13 @@ export default function Login() {
 
   return (
     <div className="grid min-h-full place-items-center p-4">
-      <form onSubmit={enviar} className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form onSubmit={enviar} className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-noche-900 p-6 shadow-sm">
         <div>
           <p className="text-2xl" aria-hidden>
             🏍️
           </p>
           <h1 className="text-lg font-semibold">Panel de Don Repuestos Jaimes</h1>
-          <p className="text-sm text-slate-500">Acceso solo para personal autorizado.</p>
+          <p className="text-sm text-gris-tec">Acceso solo para personal autorizado.</p>
         </div>
         {error && <Alerta>{error}</Alerta>}
         <Campo etiqueta="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" />
@@ -43,7 +43,7 @@ export default function Login() {
         <Boton type="submit" disabled={enviando}>
           {enviando ? 'Entrando…' : 'Entrar'}
         </Boton>
-        <Link to="/" className="text-center text-sm text-marca-700 hover:underline">
+        <Link to="/" className="text-center text-sm text-electrico-300 hover:underline">
           Ir al chat de clientes
         </Link>
       </form>

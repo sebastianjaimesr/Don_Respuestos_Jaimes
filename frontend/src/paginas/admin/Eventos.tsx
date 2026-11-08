@@ -50,7 +50,7 @@ export default function Eventos() {
                   </td>
                   <td className="px-2 py-2 font-mono text-xs">{e.tipo}</td>
                   <td className="px-2 py-2">{e.mensaje}</td>
-                  <td className="max-w-xs truncate px-2 py-2 font-mono text-xs text-slate-500" title={JSON.stringify(e.datos)}>
+                  <td className="max-w-xs truncate px-2 py-2 font-mono text-xs text-gris-tec" title={JSON.stringify(e.datos)}>
                     {JSON.stringify(e.datos)}
                   </td>
                 </tr>

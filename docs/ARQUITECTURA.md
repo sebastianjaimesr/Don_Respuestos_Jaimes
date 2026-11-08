@@ -235,7 +235,7 @@ Convenciones actuales que se mantienen: prefijo `/api`, respuesta `{ ok: true, d
 
 ### 4.3 Panel (cookie de sesión de asesor + permiso)
 
-> **Estado (fase 4C):** todas las áreas de esta tabla funcionan. Las imágenes necesitan las credenciales de Supabase (o `ALMACENAMIENTO=local` en desarrollo). Las tarifas de envío ya se administran, pero el checkout sigue usando `costo_envio` de la configuración hasta la fase 7.
+> **Estado (fase 5):** todas las áreas de esta tabla funcionan y tienen pantalla en el panel (§ 11.3). Las imágenes necesitan las credenciales de Supabase (o `ALMACENAMIENTO=local` en desarrollo). Las tarifas de envío ya se administran, pero el checkout sigue usando `costo_envio` de la configuración hasta la fase 7.
 
 Cada ruta exige un permiso (§ 5.2). Las escrituras quedan en `auditoria`.
 
@@ -277,9 +277,9 @@ Sin cambios: `POST /api/integraciones/mensaje`, `/integraciones/eventos`, `/coti
 | Revocación | Se consulta `asesores.activo` y el rol en cada solicitud (como hoy) | Se consulta `clientes` en cada solicitud |
 | Límites | 10 intentos de login / 15 min (actual) | Igual |
 
-Mientras el panel actual se migra a cookies (fase 5), el login también devuelve el token en el cuerpo y el backend sigue aceptando `Authorization: Bearer` (lo usa n8n). Con `Bearer` no se pide CSRF, porque un sitio ajeno no puede poner ese encabezado.
+El login también devuelve el token en el cuerpo y el backend acepta `Authorization: Bearer` (lo usa n8n). Con `Bearer` no se pide CSRF, porque un sitio ajeno no puede poner ese encabezado. Un token de cliente nunca abre rutas del panel (se verifica `aud`).
 
-El token deja de estar en `sessionStorage`: JavaScript no puede leerlo, así que un XSS no puede robarlo. Un token de cliente nunca abre rutas del panel (se verifica `aud`).
+**Decisión de la fase 5:** el panel sigue enviando el token con `Bearer` desde `sessionStorage` (se borra al cerrar la pestaña, y `Salir` también cierra la cookie con `POST /auth/logout`). Mientras la tienda esté en GitHub Pages y la API en Render, la cookie `drj_panel` es de terceros y Safari la bloquea, así que pasar el panel solo a cookie lo dejaría inservible en iPhone y Mac. Cuando ambos queden bajo el mismo dominio (ver PENDIENTES_PRODUCCION), el panel puede dejar de guardar el token y usar solo la cookie `HttpOnly` + CSRF, que ya funcionan en el backend.
 
 ### 5.2 Permisos
 
@@ -488,7 +488,23 @@ frontend/src/
 
 **Sesión de cliente entre dominios:** si la tienda (GitHub Pages) y la API (Render) están en dominios distintos, Safari y algunos navegadores bloquean la cookie de sesión de terceros. El carrito y la compra funcionan igual (no usan cookie); el ingreso de clientes necesita que ambos queden bajo el mismo dominio (por ejemplo `tienda.midominio.com` y `api.midominio.com`). Ver PENDIENTES_PRODUCCION.
 
-### 11.3 Identidad visual
+### 11.3 Panel del negocio
+
+> **Estado (fase 5):** implementado, con el mismo tema oscuro de la tienda.
+
+El menú se arma con los permisos que devuelve `GET /api/auth/yo`: cada usuario ve solo lo que puede usar, y si entra por URL directa a una sección sin permiso ve un aviso. Es comodidad: el servidor verifica cada solicitud.
+
+| Grupo | Pantallas |
+|---|---|
+| — | Resumen: ventas de hoy y del mes, pedidos por confirmar, inventario a precio de venta y a costo (avisa cuántos productos no tienen costo), stock bajo, agotados, sin precio, ventas de 14 días e inventario por categoría (tabla con barras), más vendidos y alertas |
+| Ventas | Pedidos, cotizaciones, atención humana |
+| Catálogo | Productos (formulario completo: SKU, referencia del fabricante, código de barras, tipo original/genérico/alternativo, costo, especificaciones, proveedor; detalle con fotos, compatibilidades por versión, movimientos e historial de precios), Motos (fabricantes, modelos, versiones), Categorías y marcas, Promociones, Precios masivos (vista previa antes de aplicar) |
+| Inventario | Existencias, Movimientos (global con filtros), Compras (borrador → recibida, que sube el stock; anulación con motivo), Proveedores, Importar y exportar (plantillas, validación en seco, tabla y CSV de errores, aplicar solo válidas o todo o nada, historial; exportación CSV/Excel) |
+| Sistema | Configuración, Tarifas de envío, Usuarios y roles (matriz de permisos por rol, crear roles), Auditoría, Registro de eventos |
+
+Las descargas y subidas de archivos usan `fetch` con el token (un enlace normal no lo enviaría). Las fechas sin hora (`fecha_compra`) viajan como `AAAA-MM-DD` y se muestran sin convertir de zona horaria.
+
+### 11.4 Identidad visual
 
 | Token | Valor |
 |---|---|
@@ -597,9 +613,9 @@ Variables nuevas del backend: `ANTHROPIC_API_KEY`, `IA_MODELO`, `IA_ESFUERZO`, `
 | Sin catálogo público ni carrito fuera del chat | § 4.1, § 10, § 11 |
 | Faltan SKU, costo, proveedor, imágenes, especificaciones | § 3.3, § 8 |
 | Sin importación, historial de precios ni auditoría general | § 3.2, § 9 |
-| Métricas del mes en UTC y no en hora de Bogotá | Se corrige en la fase 5 junto con el dashboard ampliado |
-| Token del panel en `sessionStorage` | § 5.1 |
-| Panel en tema claro distinto a la tienda | § 11.1 |
+| Métricas del mes en UTC y no en hora de Bogotá | Corregido: `GET /admin/metricas` calcula día y mes en `America/Bogota` |
+| Token del panel en `sessionStorage` | Se mantiene a propósito hasta tener un solo dominio (§ 5.1) |
+| Panel en tema claro distinto a la tienda | Corregido en la fase 5 (§ 11.3) |
 | `rutas/admin.ts` con SQL dentro | § 12 |
 
 ## 18. Lo que depende de servicios externos

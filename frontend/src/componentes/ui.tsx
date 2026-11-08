@@ -9,10 +9,10 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 // ---------------------------------------------------------------------
 type Variante = 'primario' | 'secundario' | 'peligro' | 'fantasma';
 const VARIANTES: Record<Variante, string> = {
-  primario: 'bg-marca-700 text-white hover:bg-marca-800 disabled:bg-slate-300',
-  secundario: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 disabled:text-slate-400',
-  peligro: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-300',
-  fantasma: 'text-marca-700 hover:bg-marca-50 disabled:text-slate-400',
+  primario: 'bg-electrico-500 text-white hover:bg-electrico-400 disabled:bg-white/10',
+  secundario: 'bg-white/[0.04] text-slate-100 border border-white/15 hover:bg-white/[0.04] disabled:text-slate-500',
+  peligro: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-white/10',
+  fantasma: 'text-electrico-300 hover:bg-electrico-500/10 disabled:text-slate-500',
 };
 
 export function Boton({ variante = 'primario', tamano = 'md', className, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variante?: Variante; tamano?: 'sm' | 'md' }) {
@@ -36,16 +36,16 @@ export function Boton({ variante = 'primario', tamano = 'md', className, ...p }:
 function Envoltura({ etiqueta: et, ayuda, error, id, children }: { etiqueta: string; ayuda?: string; error?: string; id: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="text-sm font-medium text-slate-200">
         {et}
       </label>
       {children}
-      {ayuda && !error && <p className="text-xs text-slate-500">{ayuda}</p>}
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {ayuda && !error && <p className="text-xs text-gris-tec">{ayuda}</p>}
+      {error && <p className="text-xs text-red-300">{error}</p>}
     </div>
   );
 }
-const claseCampo = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-marca-600 focus:outline-none focus:ring-2 focus:ring-marca-100';
+const claseCampo = 'rounded-lg border border-white/15 bg-noche-900 px-3 py-2 text-sm shadow-sm focus:border-electrico-400 focus:outline-none focus:ring-2 focus:ring-electrico-500/30';
 
 export function Campo({ etiqueta: et, ayuda, error, ...p }: InputHTMLAttributes<HTMLInputElement> & { etiqueta: string; ayuda?: string; error?: string }) {
   const id = useId();
@@ -80,12 +80,12 @@ export function AreaTexto({ etiqueta: et, ayuda, error, ...p }: TextareaHTMLAttr
 // Insignias de estado (colores con buen contraste)
 // ---------------------------------------------------------------------
 const COLORES: Record<string, string> = {
-  verde: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-  amarillo: 'bg-amber-100 text-amber-900 ring-amber-200',
-  rojo: 'bg-red-100 text-red-800 ring-red-200',
-  azul: 'bg-blue-100 text-blue-800 ring-blue-200',
-  gris: 'bg-slate-100 text-slate-700 ring-slate-200',
-  morado: 'bg-violet-100 text-violet-800 ring-violet-200',
+  verde: 'bg-emerald-400/15 text-emerald-200 ring-emerald-400/25',
+  amarillo: 'bg-amber-400/15 text-amber-200 ring-amber-400/25',
+  rojo: 'bg-red-400/15 text-red-200 ring-red-400/25',
+  azul: 'bg-blue-400/15 text-blue-200 ring-blue-400/25',
+  gris: 'bg-white/[0.06] text-slate-200 ring-white/10',
+  morado: 'bg-violet-400/15 text-violet-200 ring-violet-400/25',
 };
 const COLOR_ESTADO: Record<string, keyof typeof COLORES> = {
   disponible: 'verde',
@@ -109,6 +109,7 @@ const COLOR_ESTADO: Record<string, keyof typeof COLORES> = {
   resuelta: 'verde',
   original: 'azul',
   generico: 'gris',
+  alternativo: 'morado',
   info: 'azul',
   aviso: 'amarillo',
   error: 'rojo',
@@ -127,10 +128,10 @@ export const InsigniaPendiente = () => <Insignia color="amarillo" texto="Pendien
 // ---------------------------------------------------------------------
 export function Tarjeta({ titulo, acciones, children, className }: { titulo?: ReactNode; acciones?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
+    <section className={cx('rounded-xl border border-white/10 bg-noche-900 shadow-sm', className)}>
       {(titulo || acciones) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-          {titulo && <h2 className="text-base font-semibold text-slate-900">{titulo}</h2>}
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-4 py-3">
+          {titulo && <h2 className="text-base font-semibold text-white">{titulo}</h2>}
           {acciones}
         </header>
       )}
@@ -143,13 +144,13 @@ export function Metrica({ titulo, valor, detalle, tono = 'normal' }: { titulo: s
   return (
     <div
       className={cx(
-        'rounded-xl border bg-white p-4 shadow-sm',
-        tono === 'alerta' ? 'border-amber-300' : tono === 'peligro' ? 'border-red-300' : 'border-slate-200',
+        'rounded-xl border bg-noche-900 p-4 shadow-sm',
+        tono === 'alerta' ? 'border-amber-400/40' : tono === 'peligro' ? 'border-red-400/40' : 'border-white/10',
       )}
     >
-      <p className="text-sm text-slate-600">{titulo}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">{valor}</p>
-      {detalle && <p className="mt-1 text-xs text-slate-500">{detalle}</p>}
+      <p className="text-sm text-slate-300">{titulo}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{valor}</p>
+      {detalle && <p className="mt-1 text-xs text-gris-tec">{detalle}</p>}
     </div>
   );
 }
@@ -163,11 +164,11 @@ export function Modal({ abierto, titulo, onCerrar, children, ancho = 'max-w-2xl'
   }, [abierto, onCerrar]);
   if (!abierto) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
-      <div role="dialog" aria-modal="true" aria-label={titulo} className={cx('max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl', ancho)}>
-        <header className="sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-3">
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onCerrar()}>
+      <div role="dialog" aria-modal="true" aria-label={titulo} className={cx('max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-noche-900 shadow-xl sm:rounded-2xl', ancho)}>
+        <header className="sticky top-0 flex items-center justify-between border-b border-white/[0.06] bg-noche-900 px-5 py-3">
           <h2 className="text-lg font-semibold">{titulo}</h2>
-          <button onClick={onCerrar} aria-label="Cerrar" className="rounded-lg p-1 text-slate-500 hover:bg-slate-100">
+          <button onClick={onCerrar} aria-label="Cerrar" className="rounded-lg p-1 text-gris-tec hover:bg-white/[0.08]">
             ✕
           </button>
         </header>
@@ -178,7 +179,7 @@ export function Modal({ abierto, titulo, onCerrar, children, ancho = 'max-w-2xl'
 }
 
 export function Alerta({ tipo = 'error', children }: { tipo?: 'error' | 'exito' | 'info' | 'aviso'; children: ReactNode }) {
-  const c = { error: 'bg-red-50 text-red-800 border-red-200', exito: 'bg-emerald-50 text-emerald-800 border-emerald-200', info: 'bg-blue-50 text-blue-800 border-blue-200', aviso: 'bg-amber-50 text-amber-900 border-amber-200' }[tipo];
+  const c = { error: 'bg-red-500/10 text-red-200 border-red-400/25', exito: 'bg-emerald-500/10 text-emerald-200 border-emerald-400/25', info: 'bg-blue-500/10 text-blue-200 border-blue-400/25', aviso: 'bg-amber-500/10 text-amber-200 border-amber-400/25' }[tipo];
   return (
     <div role={tipo === 'error' ? 'alert' : 'status'} className={cx('rounded-lg border px-3 py-2 text-sm', c)}>
       {children}
@@ -189,7 +190,7 @@ export function Alerta({ tipo = 'error', children }: { tipo?: 'error' | 'exito' 
 export function Paginacion({ pagina, tamano, total, onCambiar }: { pagina: number; tamano: number; total: number; onCambiar: (p: number) => void }) {
   const paginas = Math.max(1, Math.ceil(total / tamano));
   return (
-    <nav className="flex items-center justify-between gap-2 pt-3 text-sm text-slate-600" aria-label="Paginación">
+    <nav className="flex items-center justify-between gap-2 pt-3 text-sm text-slate-300" aria-label="Paginación">
       <span>
         {total} {total === 1 ? 'resultado' : 'resultados'}
       </span>
@@ -213,7 +214,7 @@ export function Tabla({ columnas, children, vacio, amplia }: { columnas: string[
     <div className="-mx-4 overflow-x-auto px-4">
       <table className={cx('w-full text-left text-sm', amplia && 'min-w-[720px]')}>
         <thead>
-          <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+          <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-gris-tec">
             {columnas.map((c) => (
               <th key={c} scope="col" className="px-2 py-2 font-medium">
                 {c}
@@ -221,14 +222,14 @@ export function Tabla({ columnas, children, vacio, amplia }: { columnas: string[
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-white/[0.06]">{children}</tbody>
       </table>
-      {vacio && <p className="py-8 text-center text-sm text-slate-500">No hay resultados.</p>}
+      {vacio && <p className="py-8 text-center text-sm text-gris-tec">No hay resultados.</p>}
     </div>
   );
 }
 
-export const Cargando = () => <p className="py-6 text-center text-sm text-slate-500">Cargando…</p>;
+export const Cargando = () => <p className="py-6 text-center text-sm text-gris-tec">Cargando…</p>;
 
 /** Carga datos y expone estado de carga y error. */
 export function useCarga<T>(fn: () => Promise<T>, deps: unknown[]) {
