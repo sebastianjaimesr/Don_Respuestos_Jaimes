@@ -19,7 +19,7 @@ interface AlertaStock {
 }
 
 export default function Inventario() {
-  const { puede } = useAuth();
+  const { tiene } = useAuth();
   const alertas = useCarga(() => apiAdmin<AlertaStock[]>('/admin/inventario/alertas'), []);
   const [sel, setSel] = useState<AlertaStock | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -27,9 +27,9 @@ export default function Inventario() {
   return (
     <>
       <Titulo>Inventario</Titulo>
-      <p className="mb-4 text-sm text-slate-600">
+      <p className="mb-4 text-sm text-slate-300">
         Cada entrada, salida o ajuste queda en la bitácora con usuario, fecha y motivo. Para ver el stock completo usa{' '}
-        <Link to="/admin/productos" className="text-marca-700 hover:underline">
+        <Link to="/admin/productos" className="text-electrico-300 hover:underline">
           Productos
         </Link>{' '}
         con el filtro de stock.
@@ -48,7 +48,7 @@ export default function Inventario() {
             {alertas.datos?.map((a) => (
               <tr key={a.id}>
                 <td className="px-2 py-2 font-mono text-xs">
-                  <Link to={`/admin/productos/${a.id}`} className="text-marca-700 hover:underline">
+                  <Link to={`/admin/productos/${a.id}`} className="text-electrico-300 hover:underline">
                     {a.referencia}
                   </Link>
                 </td>
@@ -62,7 +62,7 @@ export default function Inventario() {
                   <Insignia valor={a.estado} />
                 </td>
                 <td className="px-2 py-2 text-right">
-                  {puede('admin', 'vendedor') && (
+                  {tiene('inventario.mover') && (
                     <Boton tamano="sm" variante="secundario" onClick={() => setSel(a)}>
                       Registrar movimiento
                     </Boton>

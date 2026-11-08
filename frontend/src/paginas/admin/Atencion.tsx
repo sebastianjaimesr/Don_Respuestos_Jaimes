@@ -58,18 +58,18 @@ export default function Atencion() {
           {!lista.datos ? (
             <Cargando />
           ) : lista.datos.items.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">No hay solicitudes en este estado.</p>
+            <p className="py-6 text-center text-sm text-gris-tec">No hay solicitudes en este estado.</p>
           ) : (
-            <ul className="flex flex-col divide-y divide-slate-100">
+            <ul className="flex flex-col divide-y divide-white/[0.06]">
               {lista.datos.items.map((t) => (
                 <li key={t.id}>
-                  <button onClick={() => setSel(t)} className={`flex w-full flex-col gap-1 rounded-lg px-2 py-3 text-left hover:bg-slate-50 ${sel?.id === t.id ? 'bg-marca-50' : ''}`}>
+                  <button onClick={() => setSel(t)} className={`flex w-full flex-col gap-1 rounded-lg px-2 py-3 text-left hover:bg-white/[0.04] ${sel?.id === t.id ? 'bg-electrico-500/10' : ''}`}>
                     <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
                       #{t.id} · {etiqueta(t.motivo)} <Insignia valor={t.estado} />
-                      {t.canal && <span className="text-xs font-normal text-slate-500">{t.canal}</span>}
+                      {t.canal && <span className="text-xs font-normal text-gris-tec">{t.canal}</span>}
                     </span>
-                    {t.ultimo_mensaje && <span className="line-clamp-1 text-sm text-slate-600">“{t.ultimo_mensaje}”</span>}
-                    <span className="text-xs text-slate-500">
+                    {t.ultimo_mensaje && <span className="line-clamp-1 text-sm text-slate-300">“{t.ultimo_mensaje}”</span>}
+                    <span className="text-xs text-gris-tec">
                       {fecha(t.created_at)} · {t.notificado ? 'notificado por n8n' : 'sin notificación externa'}
                       {t.asesor && ` · ${t.asesor}`}
                     </span>
@@ -90,7 +90,7 @@ export default function Atencion() {
           />
         ) : (
           <Tarjeta>
-            <p className="py-10 text-center text-sm text-slate-500">Selecciona una solicitud para ver la conversación.</p>
+            <p className="py-10 text-center text-sm text-gris-tec">Selecciona una solicitud para ver la conversación.</p>
           </Tarjeta>
         )}
       </div>
@@ -99,7 +99,7 @@ export default function Atencion() {
 }
 
 function Conversacion({ t, onCambio }: { t: Transferencia; onCambio: (estado: string) => void }) {
-  const { puede } = useAuth();
+  const { tiene } = useAuth();
   const conv = useCarga(() => apiAdmin<{ conversacion: { canal: string; moto: { modelo?: string; anio?: number } } | null; mensajes: Mensaje[] }>(`/admin/transferencias/${t.id}/mensajes`), [t.id]);
   const [texto, setTexto] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +142,7 @@ function Conversacion({ t, onCambio }: { t: Transferencia; onCambio: (estado: st
     <Tarjeta
       titulo={`Solicitud #${t.id}`}
       acciones={
-        puede('admin', 'vendedor') && (
+        tiene('atencion.gestionar') && (
           <div className="flex gap-2">
             {t.estado === 'pendiente' && (
               <Boton tamano="sm" onClick={() => cambiar('en_atencion')}>
@@ -158,23 +158,23 @@ function Conversacion({ t, onCambio }: { t: Transferencia; onCambio: (estado: st
         )
       }
     >
-      <p className="mb-3 text-sm text-slate-600">
+      <p className="mb-3 text-sm text-slate-300">
         {etiqueta(t.motivo)}
         {t.detalle && ` · ${t.detalle}`}
         {moto?.modelo && ` · Moto: ${moto.modelo} ${moto.anio ?? ''}`}
       </p>
-      {t.estado === 'en_atencion' && <p className="mb-3 text-xs text-violet-800">Mientras esté “en atención”, el asistente automático no responde en esta conversación.</p>}
+      {t.estado === 'en_atencion' && <p className="mb-3 text-xs text-violet-200">Mientras esté “en atención”, el asistente automático no responde en esta conversación.</p>}
       {error && <Alerta>{error}</Alerta>}
       {aviso && <Alerta tipo="aviso">{aviso}</Alerta>}
       {!conv.datos ? (
         <Cargando />
       ) : (
-        <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto rounded-lg bg-slate-50 p-3">
+        <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto rounded-lg bg-white/[0.03] p-3">
           {conv.datos.mensajes.map((m) => (
             <div
               key={m.id}
               className={`max-w-[85%] whitespace-pre-line rounded-xl px-3 py-2 text-sm ${
-                m.rol === 'cliente' ? 'self-start border border-slate-200 bg-white' : m.rol === 'asesor' ? 'self-end bg-violet-700 text-white' : 'self-end bg-marca-100 text-slate-800'
+                m.rol === 'cliente' ? 'self-start border border-white/10 bg-noche-900' : m.rol === 'asesor' ? 'self-end bg-violet-700 text-white' : 'self-end bg-electrico-500/20 text-slate-100'
               }`}
             >
               <span className="mb-0.5 block text-[11px] opacity-70">
@@ -185,12 +185,12 @@ function Conversacion({ t, onCambio }: { t: Transferencia; onCambio: (estado: st
           ))}
         </div>
       )}
-      {puede('admin', 'vendedor') && t.estado !== 'resuelta' && t.conversacion_id && (
+      {tiene('atencion.gestionar') && t.estado !== 'resuelta' && t.conversacion_id && (
         <form onSubmit={responder} className="mt-3 flex gap-2">
           <label htmlFor="resp" className="sr-only">
             Respuesta
           </label>
-          <input id="resp" value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={2000} placeholder="Escribe tu respuesta al cliente" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input id="resp" value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={2000} placeholder="Escribe tu respuesta al cliente" className="flex-1 rounded-lg border border-white/15 px-3 py-2 text-sm" />
           <Boton type="submit" disabled={!texto.trim()}>
             Enviar
           </Boton>

@@ -103,9 +103,10 @@ describe('compras a proveedores', () => {
     const c = await request(app)
       .post('/api/admin/compras')
       .set(auth(t))
-      .send({ proveedor_id: prov, factura_proveedor: 'F-001', lineas: [{ producto_id: bujia, cantidad: 10, costo_unitario: 8000.5 }] });
+      .send({ proveedor_id: prov, factura_proveedor: 'F-001', fecha_compra: '2026-03-01', lineas: [{ producto_id: bujia, cantidad: 10, costo_unitario: 8000.5 }] });
     expect(c.status).toBe(201);
-    expect(c.body.data).toMatchObject({ estado: 'borrador', subtotal: '80005.00' });
+    // La fecha sin hora vuelve igual que se mandó (no se corre a otra zona horaria)
+    expect(c.body.data).toMatchObject({ estado: 'borrador', subtotal: '80005.00', fecha_compra: '2026-03-01' });
     expect(await stock('DEMO-BJ-R15-GN')).toBe(antes); // el borrador no toca el stock
 
     const rec = await request(app).post(`/api/admin/compras/${c.body.data.id}/recibir`).set(auth(t)).send({ actualizar_costos: true });

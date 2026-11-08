@@ -22,7 +22,7 @@ interface Detalle extends Fila {
 }
 
 export default function Cotizaciones() {
-  const { puede } = useAuth();
+  const { tiene } = useAuth();
   const [estado, setEstado] = useState('');
   const [pagina, setPagina] = useState(1);
   const [sel, setSel] = useState<string | null>(null);
@@ -68,8 +68,8 @@ export default function Cotizaciones() {
           <>
             <Tabla amplia columnas={['Código', 'Fecha', 'Cliente', 'Ítems', 'Total', 'Envío', 'Estado']} vacio={!lista.datos.items.length}>
               {lista.datos.items.map((c) => (
-                <tr key={c.codigo} className="cursor-pointer hover:bg-slate-50" onClick={() => setSel(c.codigo)}>
-                  <td className="px-2 py-2 font-mono text-xs text-marca-700">{c.codigo}</td>
+                <tr key={c.codigo} className="cursor-pointer hover:bg-white/[0.04]" onClick={() => setSel(c.codigo)}>
+                  <td className="px-2 py-2 font-mono text-xs text-electrico-300">{c.codigo}</td>
                   <td className="px-2 py-2 whitespace-nowrap">{fecha(c.fecha_emision)}</td>
                   <td className="px-2 py-2">{c.cliente ?? 'Sin identificar'}</td>
                   <td className="px-2 py-2 tabular-nums">{c.items}</td>
@@ -91,7 +91,7 @@ export default function Cotizaciones() {
           <Cargando />
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-slate-300">
               Emitida {fecha(det.datos.fecha_emision)} · <Insignia valor={det.datos.estado} />
               {det.datos.vigente_hasta ? ` · vigente hasta ${fecha(det.datos.vigente_hasta, false)}` : ' · vigencia por confirmar'}
             </p>
@@ -109,14 +109,14 @@ export default function Cotizaciones() {
               ))}
             </Tabla>
             <div className="ml-auto grid grid-cols-2 gap-x-6 text-sm">
-              <span className="text-slate-500">Subtotal</span>
+              <span className="text-gris-tec">Subtotal</span>
               <span className="text-right tabular-nums">{cop(det.datos.subtotal)}</span>
-              <span className="text-slate-500">Envío</span>
+              <span className="text-gris-tec">Envío</span>
               <span className="text-right">{det.datos.envio_confirmado ? cop(det.datos.costo_envio) : 'Por confirmar'}</span>
               <span className="font-semibold">Total</span>
               <span className="text-right font-semibold tabular-nums">{cop(det.datos.total)}</span>
             </div>
-            {puede('admin', 'vendedor') && det.datos.estado === 'emitida' && (
+            {tiene('pedidos.gestionar') && det.datos.estado === 'emitida' && (
               <div className="flex justify-end">
                 <Boton variante="peligro" onClick={anular}>
                   Anular cotización

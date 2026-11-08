@@ -29,6 +29,16 @@ const Atencion = lazy(() => import('./paginas/admin/Atencion'));
 const Configuracion = lazy(() => import('./paginas/admin/Configuracion'));
 const Usuarios = lazy(() => import('./paginas/admin/Usuarios'));
 const Eventos = lazy(() => import('./paginas/admin/Eventos'));
+const Motos = lazy(() => import('./paginas/admin/Motos'));
+const Categorias = lazy(() => import('./paginas/admin/Categorias'));
+const Proveedores = lazy(() => import('./paginas/admin/Proveedores'));
+const Promociones = lazy(() => import('./paginas/admin/Promociones'));
+const PreciosMasivos = lazy(() => import('./paginas/admin/PreciosMasivos'));
+const Movimientos = lazy(() => import('./paginas/admin/Movimientos'));
+const Compras = lazy(() => import('./paginas/admin/Compras'));
+const Datos = lazy(() => import('./paginas/admin/Datos'));
+const Envios = lazy(() => import('./paginas/admin/Envios'));
+const Auditoria = lazy(() => import('./paginas/admin/Auditoria'));
 
 const RutaProtegida = ({ children }: { children: ReactNode }) => <RutaProtegidaPerezosa>{children}</RutaProtegidaPerezosa>;
 
@@ -70,6 +80,16 @@ const rutas = (
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="usuarios" element={<Usuarios />} />
         <Route path="eventos" element={<Eventos />} />
+        <Route path="motos" element={<Motos />} />
+        <Route path="categorias" element={<Categorias />} />
+        <Route path="proveedores" element={<Proveedores />} />
+        <Route path="promociones" element={<Promociones />} />
+        <Route path="precios" element={<PreciosMasivos />} />
+        <Route path="movimientos" element={<Movimientos />} />
+        <Route path="compras" element={<Compras />} />
+        <Route path="datos" element={<Datos />} />
+        <Route path="envios" element={<Envios />} />
+        <Route path="auditoria" element={<Auditoria />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

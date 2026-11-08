@@ -85,3 +85,49 @@ export const qs = (o: Record<string, string | number | undefined | null>) => {
   const s = p.toString();
   return s ? `?${s}` : '';
 };
+
+/** URL absoluta de una ruta del backend (para subidas a /api/almacen-local en desarrollo). */
+export const urlBackend = (ruta: string) => (/^https?:\/\//.test(ruta) ? ruta : (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '') + ruta);
+
+/**
+ * Descarga un archivo del panel (CSV/Excel). Va con la sesión del asesor, por eso
+ * no sirve un enlace normal: se pide con fetch y se guarda como archivo.
+ */
+export async function descargar(ruta: string, nombre: string) {
+  const headers: Record<string, string> = {};
+  const t = sesion.token();
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const res = await fetch(BASE + ruta, { headers, credentials: 'include' });
+  if (!res.ok) {
+    const e = (await res.json().catch(() => null))?.error ?? {};
+    throw new ErrorApi(res.status, e.codigo ?? 'ERROR', e.mensaje ?? 'No se pudo descargar el archivo');
+  }
+  const desc = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1];
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = desc ?? nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Envía un archivo crudo (importaciones). */
+export async function subirArchivo<T>(ruta: string, archivo: File): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
+  const t = sesion.token();
+  if (t) headers.Authorization = `Bearer ${t}`;
+  let res: Response;
+  try {
+    res = await fetch(BASE + ruta, { method: 'POST', headers, credentials: 'include', body: archivo });
+  } catch {
+    throw new ErrorApi(0, 'SIN_CONEXION', 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.');
+  }
+  const datos = await res.json().catch(() => null);
+  if (!res.ok || !datos?.ok) {
+    const e = datos?.error ?? {};
+    throw new ErrorApi(res.status, e.codigo ?? 'ERROR', e.mensaje ?? 'Ocurrió un error inesperado', e.detalles);
+  }
+  return datos.data as T;
+}

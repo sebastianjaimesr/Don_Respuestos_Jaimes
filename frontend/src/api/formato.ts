@@ -6,12 +6,14 @@ export function cop(valor: string | number | null | undefined): string {
 
 export function fecha(v: string | null | undefined, conHora = true): string {
   if (!v) return '—';
+  // Una fecha sola (AAAA-MM-DD) es un día del calendario, no un instante: no se corre de zona horaria.
+  const soloDia = /^\d{4}-\d{2}-\d{2}$/.test(v);
   return new Date(v).toLocaleString('es-CO', {
-    timeZone: 'America/Bogota',
+    timeZone: soloDia ? 'UTC' : 'America/Bogota',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-    ...(conHora ? { hour: '2-digit', minute: '2-digit' } : {}),
+    ...(conHora && !soloDia ? { hour: '2-digit', minute: '2-digit' } : {}),
   });
 }
 
@@ -43,6 +45,9 @@ export const ETIQUETAS: Record<string, string> = {
   // otros
   original: 'Original',
   generico: 'Genérico',
+  alternativo: 'Alternativo',
+  borrador: 'Borrador',
+  recibida: 'Recibida',
   recogida_tienda: 'Recoge en tienda',
   envio: 'Envío',
   nequi: 'Nequi',

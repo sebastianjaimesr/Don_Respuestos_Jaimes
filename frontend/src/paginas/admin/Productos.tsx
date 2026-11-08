@@ -25,7 +25,7 @@ interface Fila {
 }
 
 export default function Productos() {
-  const { puede } = useAuth();
+  const { tiene } = useAuth();
   const nav = useNavigate();
   const [filtros, setFiltros] = useState({ q: '', categoria: '', tipo: '', estado_stock: '', activo: '' });
   const [busqueda, setBusqueda] = useState('');
@@ -43,10 +43,15 @@ export default function Productos() {
 
   return (
     <>
-      <Titulo acciones={puede('admin') && <Boton onClick={() => setNuevo(true)}>Nuevo producto</Boton>}>Productos</Titulo>
+      <Titulo
+        descripcion="Todo el catálogo, también los inactivos. Abre un producto para ver sus compatibilidades, fotos, movimientos e historial de precios."
+        acciones={tiene('productos.editar') && <Boton onClick={() => setNuevo(true)}>Nuevo producto</Boton>}
+      >
+        Productos
+      </Titulo>
       <Tarjeta>
         <form
-          className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+          className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6"
           onSubmit={(e) => {
             e.preventDefault();
             setPagina(1);
@@ -55,10 +60,10 @@ export default function Productos() {
         >
           <div className="flex items-end gap-2 lg:col-span-2">
             <div className="flex-1">
-              <label htmlFor="buscar" className="text-sm font-medium text-slate-700">
+              <label htmlFor="buscar" className="text-sm font-medium text-slate-200">
                 Buscar
               </label>
-              <input id="buscar" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o referencia" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+              <input id="buscar" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o referencia" className="mt-1 w-full rounded-lg border border-white/15 bg-noche-900 px-3 py-2 text-sm" />
             </div>
             <Boton type="submit" variante="secundario">
               Buscar
@@ -76,12 +81,18 @@ export default function Productos() {
             <option value="">Todos</option>
             <option value="original">Original</option>
             <option value="generico">Genérico</option>
+            <option value="alternativo">Alternativo</option>
           </Selector>
           <Selector etiqueta="Stock" value={filtros.estado_stock} onChange={setF('estado_stock')}>
             <option value="">Todos</option>
             <option value="disponible">Disponible</option>
             <option value="stock_bajo">Stock bajo</option>
             <option value="agotado">Agotado</option>
+          </Selector>
+          <Selector etiqueta="Estado" value={filtros.activo} onChange={setF('activo')}>
+            <option value="">Todos</option>
+            <option value="true">Activos</option>
+            <option value="false">Inactivos</option>
           </Selector>
         </form>
         {lista.error && <Alerta>{lista.error}</Alerta>}
@@ -91,9 +102,9 @@ export default function Productos() {
           <>
             <Tabla amplia columnas={['Referencia', 'Producto', 'Tipo', 'Precio', 'Stock', 'Compat.', 'Estado']} vacio={!lista.datos?.items.length}>
               {lista.datos?.items.map((p) => (
-                <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/admin/productos/${p.id}`)}>
+                <tr key={p.id} className="cursor-pointer hover:bg-white/[0.04]" onClick={() => nav(`/admin/productos/${p.id}`)}>
                   <td className="px-2 py-2 font-mono text-xs">
-                    <Link to={`/admin/productos/${p.id}`} className="text-marca-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                    <Link to={`/admin/productos/${p.id}`} className="text-electrico-300 hover:underline" onClick={(e) => e.stopPropagation()}>
                       {p.referencia}
                     </Link>
                   </td>
@@ -103,10 +114,10 @@ export default function Productos() {
                       {p.es_demo && <InsigniaDemo />}
                       {!p.activo && <Insignia color="gris" texto="Inactivo" />}
                     </div>
-                    <span className="text-xs text-slate-500">{p.marca}</span>
+                    <span className="text-xs text-gris-tec">{p.marca}</span>
                   </td>
                   <td className="px-2 py-2">
-                    <Insignia valor={p.tipo} />
+                    <Insignia valor={p.tipo} texto={p.tipo === 'alternativo' ? 'Alternativo' : undefined} />
                   </td>
                   <td className="px-2 py-2 tabular-nums">{p.precio ? cop(p.precio) : <Insignia color="amarillo" texto="Sin precio" />}</td>
                   <td className="px-2 py-2 tabular-nums">{p.cantidad ?? '—'}</td>
@@ -121,7 +132,7 @@ export default function Productos() {
           </>
         )}
       </Tarjeta>
-      <Modal abierto={nuevo} titulo="Nuevo producto" onCerrar={() => setNuevo(false)}>
+      <Modal abierto={nuevo} titulo="Nuevo producto" onCerrar={() => setNuevo(false)} ancho="max-w-3xl">
         <FormProducto onGuardado={(p) => nav(`/admin/productos/${p.id}`)} />
       </Modal>
     </>

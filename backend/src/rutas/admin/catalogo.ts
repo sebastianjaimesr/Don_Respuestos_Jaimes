@@ -93,7 +93,19 @@ r.get(
 r.get(
   '/fabricantes',
   ver,
-  h(async (_req, res) => ok(res, (await pool.query('SELECT id, nombre, slug, activo, orden FROM fabricantes_moto ORDER BY orden, nombre')).rows)),
+  h(async (_req, res) =>
+    ok(
+      res,
+      // alias y logo se devuelven para que el panel pueda editar sin borrarlos
+      (
+        await pool.query(
+          `SELECT f.id, f.nombre, f.slug, f.alias, f.logo_url, f.activo, f.orden,
+                  (SELECT COUNT(*)::int FROM modelos_motocicleta mo WHERE mo.fabricante_id = f.id) AS modelos
+           FROM fabricantes_moto f ORDER BY f.orden, f.nombre`,
+        )
+      ).rows,
+    ),
+  ),
 );
 
 r.get(
