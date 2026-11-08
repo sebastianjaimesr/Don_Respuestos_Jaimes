@@ -11,7 +11,7 @@ export interface LineaCalculada {
   producto_id: number;
   referencia: string;
   descripcion: string;
-  tipo: 'original' | 'generico';
+  tipo: 'original' | 'generico' | 'alternativo';
   cantidad: number;
   stock_disponible: number;
   precio_unitario: string;
@@ -56,7 +56,7 @@ export async function calcularLineas(
   const ids = items.map((i) => i.producto_id).sort((a, b) => a - b);
   // ORDER BY id + FOR UPDATE: bloqueo en orden fijo para evitar interbloqueos (deadlocks)
   const { rows } = await db.query(
-    `SELECT p.id, p.referencia, p.nombre, p.tipo, p.precio, p.activo, p.es_demo, i.cantidad AS stock
+    `SELECT p.id, p.sku AS referencia, p.nombre, p.tipo, p.precio, p.activo, p.es_demo, i.cantidad AS stock
      FROM productos p JOIN inventario i ON i.producto_id = p.id
      WHERE p.id = ANY($1::int[])
      ORDER BY p.id

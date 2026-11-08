@@ -1,4 +1,4 @@
-import { AMBIGUOS, CATEGORIAS } from '../modulos/catalogo/categorias';
+import { categoriaPorClave, categoriasHoja, gruposDeCategorias, hijasDe } from '../modulos/catalogo/categorias';
 import { contieneFrase, normalizar } from '../utils/texto';
 
 /**
@@ -11,21 +11,48 @@ export type ResultadoCategoria =
   | { tipo: 'ambigua'; opciones: string[]; pregunta: string }
   | { tipo: 'ninguna' };
 
+const MAX_OPCIONES = 6;
+
+function unirConO(partes: string[]) {
+  return partes.length <= 1 ? (partes[0] ?? '') : `${partes.slice(0, -1).join(', ')} o ${partes[partes.length - 1]}`;
+}
+
+/** Pregunta para elegir entre varias categorías: "En frenos, ¿necesitas pastillas de freno, bandas de freno o disco de freno?" */
+export function preguntaCategoria(opciones: string[]): string {
+  const cats = opciones.map((o) => categoriaPorClave(o)).filter((c) => c !== undefined);
+  const nombres = cats.map((c) => c.etiqueta.charAt(0).toLowerCase() + c.etiqueta.slice(1));
+  const padre = cats[0]?.padre;
+  const grupo = padre && cats.every((c) => c.padre === padre) ? categoriaPorClave(padre) : undefined;
+  return grupo ? `En ${grupo.etiqueta.toLowerCase()}, ¿necesitas ${unirConO(nombres)}?` : `¿Necesitas ${unirConO(nombres)}?`;
+}
+
+/**
+ * Busca la categoría hoja cuyo sinónimo coincide con la frase MÁS LARGA.
+ * Si solo coincide un grupo ("filtro", "los frenos", "que la moto frene"),
+ * el resultado es ambiguo y la pregunta se arma con las categorías del grupo.
+ */
 export function detectarCategoria(texto: string): ResultadoCategoria {
   const t = normalizar(texto);
   // Si el texto ya es una clave interna (ej. "filtro_aceite")
-  const directa = CATEGORIAS.find((c) => c.clave === texto.trim());
-  if (directa) return { tipo: 'encontrada', clave: directa.clave };
+  const directa = categoriaPorClave(texto.trim());
+  if (directa && directa.padre !== null) return { tipo: 'encontrada', clave: directa.clave };
 
   let mejor: { clave: string; largo: number } | null = null;
-  for (const c of CATEGORIAS) {
-    for (const s of c.sinonimos) {
+  for (const c of categoriasHoja()) {
+    for (const s of [normalizar(c.etiqueta), ...c.sinonimos]) {
       if (contieneFrase(t, s) && (!mejor || s.length > mejor.largo)) mejor = { clave: c.clave, largo: s.length };
     }
   }
   if (mejor) return { tipo: 'encontrada', clave: mejor.clave };
-  for (const a of AMBIGUOS) {
-    if (contieneFrase(t, a.palabra)) return { tipo: 'ambigua', opciones: a.opciones, pregunta: a.pregunta };
+
+  const grupo = directa ?? gruposDeCategorias().find((g) => [normalizar(g.etiqueta), ...g.sinonimos].some((s) => contieneFrase(t, s)));
+  if (grupo) {
+    const hijas = hijasDe(grupo.clave).slice(0, MAX_OPCIONES);
+    if (hijas.length === 1) return { tipo: 'encontrada', clave: hijas[0].clave };
+    if (hijas.length > 1) {
+      const opciones = hijas.map((h) => h.clave);
+      return { tipo: 'ambigua', opciones, pregunta: preguntaCategoria(opciones) };
+    }
   }
   return { tipo: 'ninguna' };
 }
@@ -41,7 +68,7 @@ export function detectarTipo(texto: string): 'original' | 'generico' | 'cualquie
   const t = normalizar(texto);
   if (/\b(cualquiera|me da igual|ambos|las dos|los dos|lo que haya)\b/.test(t)) return 'cualquiera';
   if (/\b(no original(es)?|generic[oa]s?|alternativ[oa]s?|replica|economic[oa]s?|mas barat[oa]s?)\b/.test(t)) return 'generico';
-  if (/\b(original(es)?|de marca yamaha|legitim[oa]s?)\b/.test(t)) return 'original';
+  if (/\b(original(es)?|de marca|de la marca|legitim[oa]s?)\b/.test(t)) return 'original';
   return null;
 }
 
@@ -58,6 +85,8 @@ export interface ModeloCatalogo {
   id: number;
   nombre: string;
   alias: string[];
+  /** Fabricante de la moto (Yamaha, Honda, Bajaj…) */
+  fabricante?: string;
 }
 
 export type ResultadoModelo =

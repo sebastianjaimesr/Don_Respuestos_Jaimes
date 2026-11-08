@@ -1,6 +1,6 @@
 # Don Repuestos Jaimes 🏍️
 
-Asistente virtual de ventas de repuestos para motos **Yamaha** en Colombia, con panel administrativo, inventario, cotizaciones, pedidos y atención humana.
+Plataforma de repuestos **multimarca** para motos en Colombia (Yamaha, Honda, Suzuki, Bajaj, AKT, TVS y más): asistente virtual de ventas, con panel administrativo, inventario, cotizaciones, pedidos y atención humana.
 
 > **Datos de demostración:** el proyecto trae productos FICTICIOS (referencias `DEMO-*`) para probar. No son el inventario real del negocio. Bórralos con `database/seeds/borrar_demo.sql` antes de cargar el inventario real.
 

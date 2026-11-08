@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { detectarAnio, detectarCategoria, detectarIntenciones, detectarModelo, detectarOpcion, detectarPosicion, detectarTipo, pareceTarjeta } from '../../src/asistente/extraccion';
 import { normalizarTelefono } from '../../src/utils/texto';
+import { establecerCategorias } from '../../src/modulos/catalogo/categorias';
+import { CATEGORIAS_PRUEBA } from './categorias.fixture';
+
+// Sin base de datos: la caché de categorías se llena con una copia de las de la migración 003.
+beforeAll(() => establecerCategorias(CATEGORIAS_PRUEBA));
 
 const MODELOS = [
   { id: 1, nombre: 'FZ 2.0', alias: ['fz 2.0', 'fz2.0', 'fz 2', 'fz'] },
@@ -30,14 +35,27 @@ describe('detección de repuesto', () => {
     expect(detectarCategoria('un litro de aceite')).toEqual({ tipo: 'encontrada', clave: 'aceite_motor' });
   });
   it('pregunta cuando el repuesto es ambiguo', () => {
-    expect(detectarCategoria('necesito un filtro')).toMatchObject({ tipo: 'ambigua', opciones: ['filtro_aire', 'filtro_aceite'] });
-    expect(detectarCategoria('los frenos')).toMatchObject({ tipo: 'ambigua' });
+    expect(detectarCategoria('necesito un filtro')).toMatchObject({ tipo: 'ambigua', opciones: ['filtro_aire', 'filtro_aceite', 'filtro_gasolina'] });
+    expect(detectarCategoria('los frenos')).toMatchObject({ tipo: 'ambigua', opciones: ['pastillas_freno', 'bandas_freno', 'disco_freno'] });
+  });
+  it('entiende descripciones en lenguaje natural y nombres colombianos', () => {
+    expect(detectarCategoria('la pieza que hace que la moto frene')).toMatchObject({ tipo: 'ambigua', opciones: ['pastillas_freno', 'bandas_freno', 'disco_freno'] });
+    expect(detectarCategoria('se me dañó el clutch')).toEqual({ tipo: 'encontrada', clave: 'clutch' });
+    expect(detectarCategoria('el croche patina')).toEqual({ tipo: 'encontrada', clave: 'clutch' });
+    expect(detectarCategoria('amortiguador trasero')).toEqual({ tipo: 'encontrada', clave: 'amortiguador' });
+    expect(detectarCategoria('discos de clutch')).toEqual({ tipo: 'encontrada', clave: 'clutch' });
+  });
+  it('arma la pregunta con las categorías del grupo', () => {
+    const r = detectarCategoria('necesito un filtro');
+    expect(r.tipo === 'ambigua' && r.pregunta).toBe('En filtros, ¿necesitas filtro de aire, filtro de aceite o filtro de gasolina?');
   });
   it('detecta posición, tipo, año, opción', () => {
     expect(detectarPosicion('las de atrás')).toBe('trasero');
     expect(detectarPosicion('pastillas delanteras')).toBe('delantero');
     expect(detectarTipo('algo genérico, más barato')).toBe('generico');
     expect(detectarTipo('original yamaha')).toBe('original');
+    expect(detectarTipo('original honda')).toBe('original');
+    expect(detectarTipo('uno alternativo')).toBe('generico');
     expect(detectarAnio('modelo 2018')).toBe(2018);
     expect(detectarAnio('fz 25')).toBeNull();
     expect(detectarOpcion('la 2')).toBe(2);

@@ -11,9 +11,15 @@ export const app = crearApp();
 const SEED = fs.readFileSync(path.resolve(__dirname, '../../database/seeds/demo_ficticio.sql'), 'utf8');
 const CONFIG = fs.readFileSync(path.resolve(__dirname, '../../database/migrations/002_configuracion_negocio.sql'), 'utf8');
 
+const BASE = ['schema_migraciones', 'categorias', 'fabricantes_moto', 'roles', 'permisos', 'rol_permisos'];
+
 /** Borra todos los datos y vuelve a cargar configuración + datos ficticios. */
 export async function reiniciarDatos() {
-  const { rows } = await pool.query(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migraciones'`);
+  // Los datos base de las migraciones (categorías, fabricantes, roles y permisos) se conservan.
+  const { rows } = await pool.query(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND NOT (tablename = ANY($1::text[]))`,
+    [BASE],
+  );
   await pool.query(`TRUNCATE ${rows.map((r) => `"${r.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
   await pool.query(`ALTER SEQUENCE seq_codigo_pedido RESTART WITH 1; ALTER SEQUENCE seq_codigo_cotizacion RESTART WITH 1;`);
   await pool.query(CONFIG);
@@ -21,13 +27,13 @@ export async function reiniciarDatos() {
 }
 
 export async function idProducto(referencia: string): Promise<number> {
-  const { rows } = await pool.query('SELECT id FROM productos WHERE referencia = $1', [referencia]);
+  const { rows } = await pool.query('SELECT id FROM productos WHERE sku = $1', [referencia]);
   if (!rows[0]) throw new Error(`No existe ${referencia}`);
   return rows[0].id;
 }
 
 export async function stock(referencia: string): Promise<number> {
-  const { rows } = await pool.query('SELECT i.cantidad FROM inventario i JOIN productos p ON p.id = i.producto_id WHERE p.referencia = $1', [referencia]);
+  const { rows } = await pool.query('SELECT i.cantidad FROM inventario i JOIN productos p ON p.id = i.producto_id WHERE p.sku = $1', [referencia]);
   return rows[0].cantidad;
 }
 

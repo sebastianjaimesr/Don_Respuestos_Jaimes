@@ -11,7 +11,7 @@ describe('asistente conversacional', () => {
   it('saluda con el mensaje definido y pide los datos que faltan, uno o dos a la vez', async () => {
     const { enviar } = await nuevoChat();
     expect(textos(await enviar('necesito pastillas de freno'))).toMatch(/modelo y el año/);
-    expect(textos(await enviar('NMAX'))).toMatch(/De qué año es tu NMAX/);
+    expect(textos(await enviar('NMAX'))).toMatch(/De qué año es tu Yamaha NMAX/);
     expect(textos(await enviar('2020'))).toMatch(/delanteras o traseras/);
   });
 
@@ -19,7 +19,7 @@ describe('asistente conversacional', () => {
     const { enviar } = await nuevoChat();
     const r = await enviar('un filtro para la fz 2019');
     expect(textos(r)).toMatch(/FZ 2\.0[\s\S]*FZ 25/);
-    expect(textos(await enviar('la 1'))).toMatch(/filtro de aire o el filtro de aceite/);
+    expect(textos(await enviar('la 1'))).toMatch(/filtro de aire, filtro de aceite o filtro de gasolina/);
     const res = await enviar('aceite');
     expect(res.respuestas[0].tipo).toBe('productos');
     expect(textos(res)).toMatch(/DEMO-FA-FZ2-OR/);
@@ -35,6 +35,25 @@ describe('asistente conversacional', () => {
     expect(t).toMatch(/\$68\.000/);
     expect(t).toMatch(/compatibilidad confirmada antes de instalarlo/);
     expect(t).toMatch(/datos de demostración ficticios/);
+  });
+
+  it('multimarca: atiende otras marcas y dice "Original <fabricante>"', async () => {
+    const { enviar } = await nuevoChat();
+    const t = textos(await enviar('pastillas delanteras para mi honda cb 190 2019'));
+    expect(t).toMatch(/Honda CB 190R 2019/);
+    expect(t).toMatch(/Original Honda/);
+    expect(t).not.toMatch(/Yamaha/);
+    const clutch = textos(await enviar('y el clutch para una nkd 125 2020'));
+    expect(clutch).toMatch(/AKT NKD 125/);
+    expect(clutch).toMatch(/Alternativo \(Alternativa Demo C\)/);
+  });
+
+  it('entiende "la pieza que hace que la moto frene" y pregunta cuál repuesto de frenos', async () => {
+    const { enviar } = await nuevoChat();
+    const r = await enviar('necesito la pieza que hace que la moto frene, es una fz 2.0 2018');
+    expect(textos(r)).toMatch(/En frenos, ¿necesitas pastillas de freno, bandas de freno o disco de freno\?/);
+    expect(r.respuestas[0].acciones?.map((a) => a.accion.categoria)).toEqual(['pastillas_freno', 'bandas_freno', 'disco_freno']);
+    expect(textos(await enviar('pastillas'))).toMatch(/delanteras o traseras/);
   });
 
   it('[4] incompatibilidad de año: no ofrece el producto y propone un asesor', async () => {
@@ -116,7 +135,7 @@ describe('asistente conversacional', () => {
 
   it('redirige temas ajenos, despide con el mensaje definido y protege datos de tarjeta', async () => {
     const { enviar, id } = await nuevoChat();
-    expect(textos(await enviar('cuéntame un chiste de fútbol'))).toMatch(/repuestos para motos Yamaha/);
+    expect(textos(await enviar('cuéntame un chiste de fútbol'))).toMatch(/repuestos para motos/);
     expect(textos(await enviar('chao'))).toBe(DESPEDIDA);
     expect(textos(await enviar('mi tarjeta es 4111 1111 1111 1111'))).toMatch(/no compartas números de tarjeta/);
     const guardado = (await pool.query(`SELECT contenido FROM mensajes WHERE conversacion_id = $1 AND contenido LIKE '%4111%'`, [id])).rows;

@@ -50,7 +50,7 @@ describe('[15] autorización por roles en el backend', () => {
   it('el administrador gestiona productos; no se permite inventario negativo', async () => {
     const token = await tokenCon('admin');
     const auth = { Authorization: `Bearer ${token}` };
-    const marca = (await pool.query(`SELECT id FROM marcas WHERE nombre = 'Yamaha'`)).rows[0].id;
+    const marca = (await pool.query(`SELECT id FROM marcas_repuesto WHERE nombre = 'Yamaha'`)).rows[0].id;
     const nuevo = await request(app)
       .post('/api/admin/productos')
       .set(auth)

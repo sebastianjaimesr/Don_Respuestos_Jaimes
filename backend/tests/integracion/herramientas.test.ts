@@ -63,10 +63,10 @@ describe('buscar_repuesto(modelo, año, repuesto)', () => {
   });
 
   it('[5b] la base de datos impide mezclar un producto genérico con una marca original', async () => {
-    const yamaha = (await pool.query(`SELECT id FROM marcas WHERE nombre = 'Yamaha'`)).rows[0].id;
+    const yamaha = (await pool.query(`SELECT id FROM marcas_repuesto WHERE nombre = 'Yamaha'`)).rows[0].id;
     await expect(
-      pool.query(`INSERT INTO productos (referencia, nombre, categoria, marca_id, tipo, precio) VALUES ('X-1', 'X', 'bujia', $1, 'generico', 1000)`, [yamaha]),
-    ).rejects.toThrow(/fk_productos_marca_tipo/);
+      pool.query(`INSERT INTO productos (referencia, nombre, categoria_id, marca_id, tipo, precio) VALUES ('X-1', 'X', (SELECT id FROM categorias WHERE slug = 'bujia'), $1, 'generico', 1000)`, [yamaha]),
+    ).rejects.toThrow(/fabricante de motos es original/);
   });
 
   it('[6] producto agotado: se informa el estado y el tiempo de abastecimiento', async () => {
