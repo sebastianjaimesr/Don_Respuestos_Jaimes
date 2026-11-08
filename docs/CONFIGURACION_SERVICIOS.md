@@ -101,6 +101,22 @@ El workflow 02 envía `{ "text": "...", "content": "..." }` a `DRJ_AVISO_ASESOR_
 
 Si no configuras nada, las solicitudes igual quedan en **Panel → Atención humana** y el asistente le dice al cliente que su solicitud quedó registrada (sin prometer tiempos).
 
-## 6. (Futuro) Un modelo de lenguaje para entender mejor el texto
+## 6. Fotos de productos (Supabase Storage)
+
+El backend guarda solo la URL de cada foto; el archivo vive en Supabase Storage. El plan gratuito alcanza (1 GB).
+
+1. Crea un proyecto en [supabase.com](https://supabase.com) (región São Paulo o la más cercana).
+2. **Storage → New bucket**: nombre `productos`, **Public bucket: activado** (las fotos se ven en la tienda sin sesión).
+   En la configuración del bucket pon **File size limit: 5 MB** y **Allowed MIME types: `image/jpeg, image/png, image/webp`**. El backend también lo verifica, pero así Supabase rechaza un archivo grande antes de guardarlo.
+3. **Project Settings → API**: copia la **Project URL** y la clave **`service_role`** (no la `anon`).
+4. En Render → `drj-backend` → **Environment**: `SUPABASE_URL` = Project URL, `SUPABASE_SERVICE_KEY` = la `service_role`. `ALMACENAMIENTO` ya viene en `supabase` y `SUPABASE_BUCKET` en `productos`.
+
+> ⚠️ La `service_role` salta todas las reglas de seguridad de Supabase: solo va en el backend (Render). Nunca en el frontend, en GitHub ni en un chat.
+
+Cómo funciona una subida: el panel pide una URL firmada al backend, sube la foto **directo** a Supabase (no pasa por Render) y luego la registra; el backend revisa que exista, que pese máximo 5 MB y que sus primeros bytes sean de un JPG, PNG o WebP de verdad. Si no, la borra.
+
+En desarrollo puedes usar `ALMACENAMIENTO=local`: las fotos quedan en `backend/uploads` y se sirven en `/api/almacen-local/archivos/...`. No lo uses en Render: su disco se borra en cada despliegue.
+
+## 7. (Futuro) Un modelo de lenguaje para entender mejor el texto
 
 La v1 entiende el texto con reglas (rápido, gratis y verificable). Si más adelante quieres un LLM para frases muy libres, la forma segura es usarlo **solo para extraer** modelo, año, repuesto e intención, y seguir llamando a las mismas herramientas (`buscar_repuesto`, `registrar_pedido`, `escalar_a_humano`) para los datos. El LLM nunca debe ser la fuente de precios, stock o compatibilidad.

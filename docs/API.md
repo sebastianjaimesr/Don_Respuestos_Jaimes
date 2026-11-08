@@ -172,6 +172,8 @@ Precios, stock y totales se calculan **siempre en el servidor**; el navegador so
 | GET · PUT / DELETE | `/clientes/yo/favoritos` · `/clientes/yo/favoritos/:productoId` | Favoritos |
 | POST | `/clientes/yo/carrito/fusionar` | `{ carrito_id }`: une el carrito anónimo con el de la cuenta |
 
+Los precios de catálogo, carrito, favoritos y asistente **ya incluyen la promoción vigente**; cuando hay una, el producto trae `promocion: { nombre, precio_antes, termina_at }`.
+
 Escrituras con cookie: enviar `X-CSRF-Token: <csrf>` y `credentials: 'include'`.
 
 ## Panel administrativo
@@ -208,5 +210,28 @@ Escrituras con cookie: enviar `X-CSRF-Token: <csrf>` y `credentials: 'include'`.
 | GET / POST / PATCH | `/admin/asesores[/:id]` | `usuarios.gestionar` | Usuarios del panel |
 | GET / POST · PUT | `/admin/roles` · `/admin/roles/:clave/permisos` | `usuarios.gestionar` | Roles y sus permisos (el rol admin no se edita) |
 | GET | `/admin/eventos?nivel` · `/admin/auditoria?tabla&registro_id&asesor_id` | `auditoria.ver` | Eventos y quién cambió qué |
+| GET · POST / PUT | `/admin/promociones?estado[/:id]` | `catalogo.ver` · `precios.editar` | `{ nombre, tipo_descuento: porcentaje\|valor, valor, alcance: producto\|categoria\|marca, producto_id \| categoria \| marca_id, inicia_at, termina_at, activo }` (fechas ISO con zona). Gana el mayor descuento; no se suman |
+| GET · POST / PUT | `/admin/envios/tarifas[/:id]` | `catalogo.ver` · `configuracion.editar` | `{ ciudad, departamento, costo, dias_estimados, activo }` |
+| GET | `/admin/productos/:id/imagenes` | `catalogo.ver` | Fotos del producto |
+| POST | `/admin/productos/:id/imagenes/firma` | `imagenes.editar` | `{ tipo: image/jpeg\|image/png\|image/webp, bytes ≤ 5 MB }` → `{ clave, subida: { url, metodo: PUT, encabezados } }`. El navegador sube el archivo directo a esa URL |
+| POST | `/admin/productos/:id/imagenes` | `imagenes.editar` | `{ clave, alt?, principal? }`: verifica tamaño y contenido real; la primera foto es la principal |
+| PATCH / DELETE | `/admin/imagenes/:id` | `imagenes.editar` | `{ alt?, orden?, principal: true }` / borrar (si era la principal, pasa a la siguiente) |
+| POST | `/admin/importaciones?tipo=productos\|precios\|stock\|compatibilidades&archivo=nombre.xlsx` | `importaciones.aplicar` + el permiso del tipo | Cuerpo = el archivo crudo (`.csv` con `;` o `,`, o `.xlsx`; máx. 10 MB y 20.000 filas). **Valida en seco**: devuelve estado `validada` o `con_errores`, resumen y errores por fila. No cambia nada |
+| GET | `/admin/importaciones` · `/admin/importaciones/:id` · `/admin/importaciones/:id/errores.csv` | `importaciones.aplicar` | Historial, detalle y reporte de errores |
+| POST | `/admin/importaciones/:id/aplicar` | `importaciones.aplicar` + el permiso del tipo | `{ modo: solo_validas\|todo_o_nada }`. Vuelve a validar contra la base actual y aplica en una transacción. Precios → historial con origen `importacion`; stock → movimiento `ajuste` |
+| POST | `/admin/importaciones/:id/descartar` | `importaciones.aplicar` | |
+| GET | `/admin/importaciones/plantillas/:tipo?formato=xlsx\|csv` | `catalogo.ver` | Plantilla con una fila de ejemplo |
+| GET | `/admin/exportaciones/inventario?formato=xlsx\|csv&activo&categoria` | `exportaciones.descargar` | Mismas columnas que la importación de productos (se puede editar y volver a importar) + `stock_actual`, `estado_stock`, `es_demo` informativas |
+
+**Columnas de importación** (los encabezados se normalizan: "Año desde" = `anio_desde`, "Precio compra" = `precio_compra`):
+
+| Tipo | Obligatorias | Opcionales | Permiso extra |
+|---|---|---|---|
+| productos | sku, nombre, categoria, marca | tipo, precio, precio_compra, stock_minimo, referencia, codigo_barras, descripcion, posicion, ubicacion, activo | `productos.editar` y `precios.editar` |
+| precios | sku | precio, precio_compra (al menos uno) | `precios.editar` |
+| stock | sku, motivo | cantidad (contada) **o** diferencia | `inventario.mover` |
+| compatibilidades | sku, fabricante, modelo, anio_desde, anio_hasta | version, verificada (sí/no), fuente (obligatoria si verificada), notas | `compatibilidades.editar` |
+
+Un SKU existente se **actualiza** (solo las columnas que trae el archivo); uno nuevo se crea con stock 0. Precios: `15000`, `15.000`, `$ 15.000` y `1.234.567,50` son válidos; vacío = sin precio confirmado.
 
 Transiciones de pedido: `registrado → confirmado | cancelado`, `confirmado → en_preparacion | cancelado`, `en_preparacion → enviado | entregado | cancelado`, `enviado → entregado`.

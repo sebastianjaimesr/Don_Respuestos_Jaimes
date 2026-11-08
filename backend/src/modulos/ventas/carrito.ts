@@ -48,9 +48,9 @@ export async function crearCarrito(clienteId: number | null) {
 export async function obtenerCarrito(id: string, clienteId: number | null) {
   const c = await carritoAccesible(id, clienteId);
   const { rows } = await pool.query(
-    `SELECT ci.producto_id, ci.cantidad, p.slug, p.sku, p.nombre, p.tipo, p.precio, p.activo, p.es_demo, ma.nombre AS marca,
+    `SELECT ci.producto_id, ci.cantidad, p.slug, p.sku, p.nombre, p.tipo, vp.precio, vp.precio_lista, vp.promocion, p.activo, p.es_demo, ma.nombre AS marca,
             e.cantidad AS stock, e.estado AS disponibilidad
-     FROM carrito_items ci JOIN productos p ON p.id = ci.producto_id
+     FROM carrito_items ci JOIN productos p ON p.id = ci.producto_id JOIN v_precio_vigente vp ON vp.producto_id = p.id
      JOIN marcas_repuesto ma ON ma.id = p.marca_id JOIN v_estado_inventario e ON e.producto_id = p.id
      WHERE ci.carrito_id = $1 ORDER BY ci.agregado_at, ci.producto_id`,
     [id],
@@ -73,6 +73,7 @@ export async function obtenerCarrito(id: string, clienteId: number | null) {
       marca: r.marca,
       cantidad: r.cantidad,
       precio_unitario: r.precio as string | null,
+      promocion: r.promocion ? { nombre: r.promocion as string, precio_antes: r.precio_lista as string } : null,
       subtotal: sub === null ? null : aDecimal(sub),
       disponibles: r.activo ? r.stock : 0,
       problema,

@@ -498,7 +498,13 @@ function formatoProducto(p: ResultadoProducto, numero: number | null): string {
       ? `• Compatibilidad: ${p.compatibilidad.modelo} ${p.compatibilidad.anio_desde}–${p.compatibilidad.anio_hasta}`
       : '• Compatibilidad: sin verificar, debe confirmarla un asesor',
   );
-  lineas.push(p.precio ? `• Precio: ${formatoCOP(p.precio)}` : '• Precio: por confirmar con un asesor');
+  lineas.push(
+    !p.precio
+      ? '• Precio: por confirmar con un asesor'
+      : p.promocion
+        ? `• Precio: ${formatoCOP(p.precio)} (promoción "${p.promocion.nombre}", antes ${formatoCOP(p.promocion.precio_antes)})`
+        : `• Precio: ${formatoCOP(p.precio)}`,
+  );
   const d = p.disponibilidad;
   if (d.estado === 'agotado') {
     lineas.push(`• Disponibilidad: agotado${d.tiempo_abastecimiento_dias ? ` (abastecimiento estimado: ${d.tiempo_abastecimiento_dias} días)` : ''}`);
