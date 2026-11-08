@@ -257,7 +257,7 @@ export const PanelChat = forwardRef<ControlChat, { className?: string; pantallaC
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden
-            className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-electrico-400 to-electrico-600 shadow-[0_8px_24px_-6px_rgba(37,99,255,0.8)]"
+            className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-electrico-400 to-electrico-600 shadow-[0_8px_24px_-6px_rgba(47,107,255,0.8)]"
           >
             <IconoAsistente className="h-6 w-6 text-white" />
             <span
@@ -308,7 +308,7 @@ export const PanelChat = forwardRef<ControlChat, { className?: string; pantallaC
       <footer className="border-t border-white/[0.07] bg-noche-950/40 px-3 pt-3 pb-2 sm:px-4">
         <form
           onSubmit={alEnviar}
-          className={`mx-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5 pl-4 transition focus-within:border-electrico-400/60 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_0_4px_rgba(37,99,255,0.15)] ${pantallaCompleta ? 'max-w-3xl' : ''}`}
+          className={`mx-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-1.5 pl-4 transition focus-within:border-electrico-400/60 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_0_4px_rgba(47,107,255,0.15)] ${pantallaCompleta ? 'max-w-3xl' : ''}`}
         >
           <label htmlFor="mensaje" className="sr-only">
             Escribe tu mensaje
@@ -327,7 +327,7 @@ export const PanelChat = forwardRef<ControlChat, { className?: string; pantallaC
             type="submit"
             disabled={!texto.trim() || enviando || hayPendiente}
             aria-label="Enviar mensaje"
-            className="group inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-electrico-400 to-electrico-600 px-4 text-sm font-semibold text-white shadow-[0_8px_20px_-6px_rgba(37,99,255,0.9)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400 disabled:shadow-none"
+            className="group inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-br from-electrico-400 to-electrico-600 px-4 text-sm font-semibold text-white shadow-[0_8px_20px_-6px_rgba(47,107,255,0.9)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400 disabled:shadow-none"
           >
             <span className="hidden sm:inline">Enviar</span>
             <IconoEnviar className="h-4 w-4 transition-transform group-enabled:group-hover:translate-x-0.5" />
@@ -429,7 +429,7 @@ function EstadoConexion({
 function Burbuja({ m, activo, onAccion }: { m: MensajeUI; activo: boolean; onAccion: (b: BotonAccion) => void }) {
   if (m.rol === 'cliente') {
     return (
-      <div className="ml-auto max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-gradient-to-br from-electrico-500 to-electrico-600 px-4 py-2.5 text-sm text-white shadow-[0_10px_24px_-10px_rgba(37,99,255,0.9)]">
+      <div className="ml-auto max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-gradient-to-br from-electrico-500 to-electrico-600 px-4 py-2.5 text-sm text-white shadow-[0_10px_24px_-10px_rgba(47,107,255,0.9)]">
         {m.texto}
       </div>
     );
@@ -493,7 +493,7 @@ function ProductosChat({ m, activo, onAccion }: { m: MensajeUI; activo: boolean;
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.tipo === 'original' ? 'bg-electrico-500/20 text-electrico-300 ring-1 ring-electrico-400/30' : 'bg-white/10 text-slate-300'}`}
                 >
-                  {p.tipo === 'original' ? 'Original Yamaha' : `Genérico · ${p.marca}`}
+                  {p.tipo === 'original' ? `Original ${p.marca}` : `${p.tipo === 'alternativo' ? 'Alternativo' : 'Genérico'} · ${p.marca}`}
                 </span>
                 {p.es_demo && <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] text-amber-200">Demo ficticio</span>}
               </div>

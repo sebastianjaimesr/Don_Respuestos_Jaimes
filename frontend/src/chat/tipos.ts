@@ -40,9 +40,10 @@ export interface ProductoChat {
   producto_id: number;
   referencia: string;
   nombre: string;
-  tipo: 'original' | 'generico';
+  tipo: 'original' | 'generico' | 'alternativo';
   marca: string;
   precio: string | null;
+  promocion?: { nombre: string; precio_antes: string } | null;
   vendible: boolean;
   es_demo: boolean;
   disponibilidad: { cantidad: number | null; estado: string; tiempo_abastecimiento_dias: number | null };

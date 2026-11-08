@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes } from 'react';
 export function BotonChat({ variante = 'primario', className = '', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variante?: 'primario' | 'secundario' }) {
   const estilo =
     variante === 'primario'
-      ? 'bg-gradient-to-br from-electrico-400 to-electrico-600 text-white shadow-[0_8px_20px_-8px_rgba(37,99,255,0.9)] hover:brightness-110'
+      ? 'bg-gradient-to-br from-electrico-400 to-electrico-600 text-white shadow-[0_8px_20px_-8px_rgba(47,107,255,0.9)] hover:brightness-110'
       : 'border border-white/15 bg-white/[0.04] text-slate-100 hover:border-electrico-400/50 hover:bg-white/[0.08]';
   return (
     <button

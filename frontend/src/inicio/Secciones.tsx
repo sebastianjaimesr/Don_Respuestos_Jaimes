@@ -24,7 +24,7 @@ const CARACTERISTICAS = [
   {
     icono: Iconos.medalla,
     titulo: 'Repuestos de calidad',
-    texto: 'Originales Yamaha y genéricos claramente identificados, con la compatibilidad de tu modelo y año a la vista.',
+    texto: 'Originales de cada fabricante, genéricos y alternativos claramente identificados, con la compatibilidad de tu modelo y año a la vista.',
   },
 ];
 
@@ -75,59 +75,60 @@ function useDatos<T>(ruta: string) {
   return { ...estado, reintentar: () => setIntento((x) => x + 1) };
 }
 
-export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
-  const categorias = useDatos<Categoria[]>('/categorias');
-  const modelos = useDatos<{ id: number; nombre: string; fabricante?: string }[]>('/modelos');
-  const consultar = (t: string) => irAlAsistente(() => preguntar(t));
+interface GrupoCategoria {
+  clave: string;
+  etiqueta: string;
+  categorias: Categoria[];
+}
 
-  const destacadas = (categorias.datos ?? []).filter((c) => IMAGEN_POR_CATEGORIA[c.clave]);
-  const otras = (categorias.datos ?? []).filter((c) => !IMAGEN_POR_CATEGORIA[c.clave]);
+/** Categorías y modelos reales del backend; cada tarjeta abre el catálogo filtrado. */
+export function Catalogo() {
+  const grupos = useDatos<GrupoCategoria[]>('/catalogo/categorias');
+  const modelos = useDatos<{ id: number; nombre: string; fabricante?: string }[]>('/modelos');
+  const hojas = (grupos.datos ?? []).flatMap((g) => g.categorias);
+  const conImagen = hojas.filter((c) => IMAGEN_POR_CATEGORIA[c.clave]);
 
   return (
     <section id="catalogo" className="relative scroll-mt-20 py-20 sm:py-28">
-      <div aria-hidden className="absolute inset-x-0 top-1/3 -z-10 h-[60%] bg-[radial-gradient(ellipse_at_center,rgba(37,99,255,0.12),transparent_65%)]" />
+      <div aria-hidden className="absolute inset-x-0 top-1/3 -z-10 h-[60%] bg-[radial-gradient(ellipse_at_center,rgba(47,107,255,0.12),transparent_65%)]" />
       <div className="mx-auto max-w-6xl px-5">
         <EncabezadoSeccion
-          etiqueta="Catálogo"
+          etiqueta="Categorías"
           titulo={
             <>
-              Todo para tu Yamaha, <span className="texto-electrico">en un solo lugar</span>
+              Todo para tu moto, <span className="texto-electrico">en un solo lugar</span>
             </>
           }
-          texto="Elige una categoría y el asistente te pregunta el modelo y el año de tu moto para mostrarte solo lo que le sirve, con precio y disponibilidad reales."
+          texto="Elige una categoría y filtra por tu moto: solo verás lo que tiene compatibilidad verificada, con precio y disponibilidad del inventario."
         />
 
-        {categorias.cargando && (
-          <div className="mt-14 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4" aria-label="Cargando catálogo">
+        {grupos.cargando && (
+          <div className="mt-14 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4" aria-label="Cargando categorías">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="vidrio h-80 animate-pulse rounded-3xl" />
+              <div key={i} className="vidrio h-72 animate-pulse rounded-3xl" />
             ))}
           </div>
         )}
 
-        {categorias.error && (
+        {grupos.error && (
           <Revelar className="vidrio mx-auto mt-14 flex max-w-xl flex-col items-center gap-4 rounded-3xl p-8 text-center">
-            <p className="text-slate-300">No pudimos cargar el catálogo en este momento. Si el servidor estaba en pausa, tarda unos segundos en despertar.</p>
-            <div className="flex flex-wrap justify-center gap-3">
-              <BotonPrincipal variante="vidrio" onClick={categorias.reintentar}>
-                Reintentar
-              </BotonPrincipal>
-              <BotonPrincipal onClick={() => irAlAsistente()}>Consultar con asistente</BotonPrincipal>
-            </div>
+            <p className="text-slate-300">No pudimos cargar las categorías en este momento. Si el servidor estaba en pausa, tarda unos segundos en despertar.</p>
+            <BotonPrincipal variante="vidrio" onClick={grupos.reintentar}>
+              Reintentar
+            </BotonPrincipal>
           </Revelar>
         )}
 
-        {destacadas.length > 0 && (
+        {conImagen.length > 0 && (
           <ul className="mt-14 grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-            {destacadas.map((c, i) => {
+            {conImagen.slice(0, 4).map((c, i) => {
               const img = IMAGEN_POR_CATEGORIA[c.clave]!;
               return (
                 <li key={c.clave}>
                   <Revelar retraso={i * 0.08} className="h-full">
-                    <button
-                      type="button"
-                      onClick={() => consultar(`Busco ${c.etiqueta.toLowerCase()}`)}
-                      className="group vidrio relative flex h-full w-full flex-col overflow-hidden rounded-3xl p-3.5 text-left sm:p-5 transition duration-500 hover:-translate-y-1.5 hover:border-electrico-400/50 hover:shadow-[0_30px_60px_-30px_rgba(37,99,255,0.8)]"
+                    <Link
+                      to={`/catalogo?categoria=${c.clave}`}
+                      className="group vidrio relative flex h-full w-full flex-col overflow-hidden rounded-3xl p-3.5 text-left transition duration-500 hover:-translate-y-1.5 hover:border-electrico-400/50 hover:shadow-[0_30px_60px_-30px_rgba(47,107,255,0.8)] sm:p-5"
                     >
                       <div className="relative grid aspect-square place-items-center">
                         <div aria-hidden className="absolute inset-[18%] rounded-full bg-electrico-500/25 blur-2xl transition duration-500 group-hover:bg-electrico-500/45" />
@@ -135,7 +136,7 @@ export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
                           src={img.src}
                           srcSet={img.srcSet}
                           sizes="(min-width:1024px) 240px, (min-width:640px) 45vw, 85vw"
-                          alt={img.alt}
+                          alt=""
                           loading="lazy"
                           decoding="async"
                           width={480}
@@ -148,11 +149,11 @@ export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
                           <h3 className="font-display text-base font-semibold text-white sm:text-lg">{c.etiqueta}</h3>
                           <p className="mt-0.5 text-xs text-slate-400 sm:text-sm">{c.seguridad ? 'Con verificación de compatibilidad' : 'Para tu modelo y año'}</p>
                         </div>
-                        <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 sm:grid text-slate-300 transition duration-300 group-hover:border-transparent group-hover:bg-electrico-500 group-hover:text-white">
+                        <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 text-slate-300 transition duration-300 group-hover:border-transparent group-hover:bg-electrico-500 group-hover:text-white sm:grid">
                           <Iconos.flecha className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
                         </span>
                       </div>
-                    </button>
+                    </Link>
                   </Revelar>
                 </li>
               );
@@ -160,22 +161,24 @@ export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
           </ul>
         )}
 
-        {otras.length > 0 && (
+        {(grupos.datos ?? []).length > 0 && (
           <Revelar className="mt-5">
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {otras.map((c) => (
-                <li key={c.clave}>
-                  <button
-                    type="button"
-                    onClick={() => consultar(`Busco ${c.etiqueta.toLowerCase()}`)}
+              {(grupos.datos ?? []).map((g) => (
+                <li key={g.clave}>
+                  <Link
+                    to={`/catalogo?categoria=${g.clave}`}
                     className="group flex w-full items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-4 py-3.5 text-left transition duration-300 hover:border-electrico-400/40 hover:bg-white/[0.06]"
                   >
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-electrico-500/10 text-electrico-300 ring-1 ring-electrico-400/20 transition group-hover:bg-electrico-500 group-hover:text-white">
                       <Iconos.engranaje className="h-5 w-5" />
                     </span>
-                    <span className="flex-1 font-medium text-slate-200">{c.etiqueta}</span>
+                    <span className="flex-1">
+                      <span className="block font-medium text-slate-200">{g.etiqueta}</span>
+                      <span className="block text-xs text-slate-500">{g.categorias.length} {g.categorias.length === 1 ? 'categoría' : 'categorías'}</span>
+                    </span>
                     <Iconos.flecha className="h-4 w-4 text-slate-500 transition group-hover:translate-x-0.5 group-hover:text-white" />
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -188,13 +191,12 @@ export function Catalogo({ preguntar }: { preguntar: Preguntar }) {
             <ul className="flex max-w-4xl flex-wrap justify-center gap-2">
               {modelos.datos.map((mo) => (
                 <li key={mo.id}>
-                  <button
-                    type="button"
-                    onClick={() => consultar(`Tengo una ${mo.fabricante ? `${mo.fabricante} ` : ''}${mo.nombre}, ¿qué repuestos tienen?`)}
-                    className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-electrico-400/50 hover:bg-electrico-500/15 hover:text-white"
+                  <Link
+                    to={`/catalogo?modelo=${mo.id}`}
+                    className="inline-block rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-electrico-400/50 hover:bg-electrico-500/15 hover:text-white"
                   >
                     {mo.fabricante ? `${mo.fabricante} ${mo.nombre}` : mo.nombre}
-                  </button>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -257,7 +259,7 @@ const EJEMPLOS = ['Pastillas delanteras para FZ 2.0 2018', 'Filtro de aceite', '
 export function SeccionAsistente({ preguntar, children }: { preguntar: Preguntar; children: ReactNode }) {
   return (
     <section id="asistente" className="relative scroll-mt-20 py-20 sm:py-28">
-      <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_50%_at_70%_50%,rgba(37,99,255,0.18),transparent_70%)]" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_50%_at_70%_50%,rgba(47,107,255,0.18),transparent_70%)]" />
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="flex flex-col gap-8">
           <EncabezadoSeccion
@@ -273,7 +275,7 @@ export function SeccionAsistente({ preguntar, children }: { preguntar: Preguntar
           <Revelar retraso={0.1}>
             <ol className="flex flex-col gap-4">
               {[
-                ['Cuéntale qué necesitas', 'El repuesto, el modelo y el año de tu Yamaha.'],
+                ['Cuéntale qué necesitas', 'El repuesto, la marca, el modelo y el año de tu moto.'],
                 ['Elige la mejor opción', 'Compara originales y genéricos con precio y disponibilidad.'],
                 ['Confirma la entrega', 'Llena tus datos, revisa el resumen y confirma. Te damos un código de pedido.'],
               ].map(([t, d], i) => (
@@ -402,27 +404,29 @@ export function Pie() {
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-10 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3">
           <Logo />
-          <p className="max-w-xs text-sm text-slate-500">Repuestos para motos Yamaha en Colombia, con asistente virtual de ventas.</p>
+          <p className="max-w-xs text-sm text-slate-500">Repuestos para motos de todas las marcas en Colombia, con Jaimes AI, tu asistente de ventas.</p>
         </div>
         <nav aria-label="Pie de página" className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
-          <a href="#inicio" className="hover:text-white">
+          <Link to="/" className="hover:text-white">
             Inicio
-          </a>
-          <a href="#catalogo" className="hover:text-white">
+          </Link>
+          <Link to="/catalogo" className="hover:text-white">
             Catálogo
-          </a>
-          <a href="#servicios" className="hover:text-white">
-            Servicios
-          </a>
-          <a href="#contacto" className="hover:text-white">
-            Contacto
-          </a>
+          </Link>
+          <Link to="/asistente" className="hover:text-white">
+            Jaimes AI
+          </Link>
+          <Link to="/pedido" className="hover:text-white">
+            Seguir mi pedido
+          </Link>
           <Link to="/admin" className="hover:text-white">
             Panel del negocio
           </Link>
         </nav>
       </div>
-      <p className="border-t border-white/[0.04] py-5 text-center text-xs text-slate-600">© {new Date().getFullYear()} Don Repuestos Jaimes · Yamaha es una marca de su respectivo titular.</p>
+      <p className="border-t border-white/[0.04] px-5 py-5 text-center text-xs text-slate-600">
+        © {new Date().getFullYear()} Don Repuestos Jaimes · Las marcas de motos y repuestos mencionadas pertenecen a sus respectivos titulares.
+      </p>
     </footer>
   );
 }

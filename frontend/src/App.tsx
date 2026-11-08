@@ -3,6 +3,17 @@ import { Navigate, Route, Routes } from 'react-router';
 import PaginaChat from './chat/PaginaChat';
 import PaginaInicio from './inicio/PaginaInicio';
 import { ProveedorAuth } from './api/auth';
+import { ProveedorTienda } from './tienda/estado';
+import { LayoutTienda } from './tienda/LayoutTienda';
+
+// Páginas de la tienda (menos la portada) en archivos aparte: la primera visita descarga solo lo necesario.
+const PaginaCatalogo = lazy(() => import('./tienda/catalogo/PaginaCatalogo'));
+const PaginaProducto = lazy(() => import('./tienda/producto/PaginaProducto'));
+const PaginaCarrito = lazy(() => import('./tienda/carrito/PaginaCarrito'));
+const PaginaCheckout = lazy(() => import('./tienda/carrito/PaginaCheckout'));
+const PaginaPedido = lazy(() => import('./tienda/carrito/PaginaPedido'));
+const PaginaIngresar = lazy(() => import('./tienda/cuenta/PaginaIngresar'));
+const PaginaCuenta = lazy(() => import('./tienda/cuenta/PaginaCuenta'));
 
 // El panel se descarga aparte: quien visita la tienda no carga su código.
 const LayoutAdmin = lazy(() => import('./paginas/admin/Layout').then((m) => ({ default: m.LayoutAdmin })));
@@ -27,8 +38,19 @@ const SIN_SERVIDOR = import.meta.env.VITE_SIN_SERVIDOR === '1';
 const rutas = (
   <Suspense fallback={<div className="grid h-full place-items-center text-sm text-slate-500">Cargando…</div>}>
     <Routes>
-      <Route path="/" element={<PaginaInicio />} />
-      <Route path="/chat" element={<PaginaChat />} />
+      <Route element={<LayoutTienda />}>
+        <Route path="/" element={<PaginaInicio />} />
+        <Route path="/catalogo" element={<PaginaCatalogo />} />
+        <Route path="/producto/:slug" element={<PaginaProducto />} />
+        <Route path="/carrito" element={<PaginaCarrito />} />
+        <Route path="/checkout" element={<PaginaCheckout />} />
+        <Route path="/pedido" element={<PaginaPedido />} />
+        <Route path="/pedido/:codigo" element={<PaginaPedido />} />
+        <Route path="/ingresar" element={<PaginaIngresar />} />
+        <Route path="/cuenta" element={<PaginaCuenta />} />
+      </Route>
+      <Route path="/asistente" element={<PaginaChat />} />
+      <Route path="/chat" element={<Navigate to="/asistente" replace />} />
       <Route path="/admin/login" element={<Login />} />
       <Route
         path="/admin"
@@ -57,7 +79,7 @@ const rutas = (
 function AvisoSinServidor() {
   return (
     <div role="status" className="shrink-0 bg-amber-100 px-4 py-2 text-center text-sm text-amber-900">
-      Vista de demostración publicada en GitHub Pages: el servidor todavía no está conectado, así que el chat y el panel no responden.
+      Vista de demostración publicada en GitHub Pages: el servidor todavía no está conectado, así que el catálogo, el carrito, el chat y el panel no responden.
     </div>
   );
 }
@@ -65,6 +87,7 @@ function AvisoSinServidor() {
 export default function App() {
   return (
     <ProveedorAuth>
+      <ProveedorTienda>
       {SIN_SERVIDOR ? (
         <div className="flex h-full flex-col">
           <AvisoSinServidor />
@@ -73,6 +96,7 @@ export default function App() {
       ) : (
         rutas
       )}
+      </ProveedorTienda>
     </ProveedorAuth>
   );
 }

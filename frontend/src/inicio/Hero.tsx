@@ -1,6 +1,8 @@
 import { m, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from 'framer-motion';
 import { useRef, type PointerEvent } from 'react';
-import { BotonPrincipal, Iconos, irAlAsistente } from './comunes';
+import { Iconos, irAlAsistente } from './comunes';
+import { Buscador } from '../tienda/Buscador';
+import { SelectorMoto } from '../tienda/SelectorMoto';
 import { IMAGENES, type ImagenRepuesto } from './imagenes';
 
 const SUAVE = [0.22, 1, 0.36, 1] as const;
@@ -25,71 +27,61 @@ export function Hero({ onAsistente }: { onAsistente: () => void }) {
   };
 
   return (
-    <section ref={ref} id="inicio" onPointerMove={mover} className="relative isolate flex min-h-[100svh] items-center overflow-hidden pt-28 pb-16 sm:pt-32 lg:pb-24">
+    <section ref={ref} id="inicio" onPointerMove={mover} className="relative isolate -mt-[76px] flex min-h-[100svh] items-center overflow-hidden pt-28 pb-16 sm:pt-32 lg:pb-24">
       <FondoHero />
 
-      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-5 lg:grid-cols-[1.05fr_1fr] lg:gap-6">
-        <m.div style={{ y: textoY, opacity: textoOpacidad }} className="relative z-10 flex flex-col items-start gap-6 text-left">
+      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-10 px-5 lg:grid-cols-[1.15fr_0.9fr] lg:gap-6">
+        <m.div style={{ y: textoY, opacity: textoOpacidad }} className="relative z-20 flex flex-col items-start gap-6 text-left">
           <m.span
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: SUAVE }}
             className="vidrio inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium text-slate-200"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-cian-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.8)]" />
-            Especialistas en repuestos Yamaha · Colombia
+            <span className="h-1.5 w-1.5 rounded-full bg-cian-400 shadow-[0_0_10px_2px_rgba(0,212,255,0.8)]" />
+            Don Repuestos Jaimes · Repuestos para todas las marcas
           </m.span>
 
           <m.h1
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.08, ease: SUAVE }}
-            className="font-display text-[44px] leading-[1.02] font-bold tracking-tight sm:text-6xl lg:text-[76px]"
+            className="font-display text-[38px] leading-[1.04] font-bold tracking-tight uppercase sm:text-6xl lg:text-[68px]"
           >
-            <span className="texto-electrico">Don Repuestos</span>
+            <span className="text-white">¿Qué necesitas</span>
             <br />
-            <span className="text-white">Jaimes</span>
+            <span className="texto-electrico">para tu moto?</span>
           </m.h1>
 
           <m.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.16, ease: SUAVE }}
-            className="font-display text-xl font-medium text-slate-100 sm:text-2xl"
+            className="max-w-xl text-base leading-relaxed text-gris-tec sm:text-lg"
           >
-            Encuentra los repuestos que tu Yamaha necesita
+            Busca por repuesto, referencia o moto. Te mostramos originales, genéricos y alternativos con precio, disponibilidad y compatibilidad reales del inventario.
           </m.p>
 
-          <m.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.22, ease: SUAVE }}
-            className="max-w-xl text-base leading-relaxed text-slate-400 sm:text-lg"
-          >
-            Originales y genéricos bien identificados, con compatibilidad por modelo y año. Consulta precio y disponibilidad del inventario con nuestro asistente virtual y deja tu pedido listo en
-            minutos.
-          </m.p>
-
-          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.3, ease: SUAVE }} className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <BotonPrincipal href="#catalogo">
-              <Iconos.lupa className="h-5 w-5" />
-              Explorar catálogo
-            </BotonPrincipal>
-            <BotonPrincipal variante="vidrio" onClick={() => irAlAsistente(onAsistente)}>
-              <Iconos.chat className="h-5 w-5 text-electrico-300" />
-              Consultar con asistente
-              <Iconos.flecha className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </BotonPrincipal>
+          <m.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.24, ease: SUAVE }} className="w-full max-w-xl">
+            <Buscador grande />
           </m.div>
 
-          <m.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.5 }} className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
-            {['Compatibilidad por modelo y año', 'Precios y stock del inventario', 'Sin pedir datos de tarjeta'].map((t) => (
-              <li key={t} className="flex items-center gap-2">
-                <Iconos.check className="h-4 w-4 text-electrico-400" />
-                {t}
-              </li>
-            ))}
-          </m.ul>
+          <m.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, delay: 0.32, ease: SUAVE }}
+            className="vidrio w-full max-w-xl rounded-2xl p-3 sm:p-4"
+          >
+            <p className="mb-2.5 text-sm font-semibold text-white">¿Qué moto tienes?</p>
+            <SelectorMoto compacto />
+          </m.div>
+
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1, delay: 0.45 }} className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gris-tec">
+            <button type="button" onClick={() => irAlAsistente(onAsistente)} className="inline-flex items-center gap-2 font-medium text-electrico-300 transition hover:text-white">
+              <Iconos.chat className="h-4 w-4" />
+              ¿No sabes qué pieza es? Pregúntale a Jaimes AI
+            </button>
+          </m.div>
         </m.div>
 
         <ComposicionRepuestos progreso={scrollYProgress} sx={sx} sy={sy} reducido={!!reducido} />
@@ -113,8 +105,8 @@ function FondoHero() {
   return (
     <div aria-hidden className="absolute inset-0 -z-10">
       <div className="rejilla absolute inset-0" />
-      <div className="absolute top-[-20%] right-[-10%] h-[70vmax] w-[70vmax] rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.28),transparent_60%)]" />
-      <div className="absolute bottom-[-30%] left-[-20%] h-[60vmax] w-[60vmax] rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.10),transparent_60%)]" />
+      <div className="absolute top-[-20%] right-[-10%] h-[70vmax] w-[70vmax] rounded-full bg-[radial-gradient(circle,rgba(47,107,255,0.28),transparent_60%)]" />
+      <div className="absolute bottom-[-30%] left-[-20%] h-[60vmax] w-[60vmax] rounded-full bg-[radial-gradient(circle,rgba(0,212,255,0.10),transparent_60%)]" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-b from-transparent to-noche-950" />
     </div>
   );
@@ -130,11 +122,11 @@ function ComposicionRepuestos({ progreso, sx, sy, reducido }: { progreso: Motion
       className="relative mx-auto aspect-square w-full max-w-[340px] sm:max-w-[460px] lg:max-w-[560px]"
     >
       {/* halo y anillos técnicos */}
-      <div aria-hidden className="absolute inset-[8%] rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.45),rgba(37,99,255,0.08)_45%,transparent_70%)] blur-2xl" />
+      <div aria-hidden className="absolute inset-[8%] rounded-full bg-[radial-gradient(circle,rgba(47,107,255,0.45),rgba(47,107,255,0.08)_45%,transparent_70%)] blur-2xl" />
       <svg aria-hidden viewBox="0 0 200 200" className="absolute inset-0 h-full w-full animate-[spin_60s_linear_infinite] text-electrico-400/30 motion-reduce:animate-none">
         <circle cx="100" cy="100" r="96" fill="none" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 5" />
         <circle cx="100" cy="100" r="82" fill="none" stroke="currentColor" strokeWidth="0.3" />
-        <path d="M100 4a96 96 0 0 1 67.9 28.1" fill="none" stroke="#4d8dff" strokeWidth="1.2" strokeLinecap="round" />
+        <path d="M100 4a96 96 0 0 1 67.9 28.1" fill="none" stroke="#5c8cff" strokeWidth="1.2" strokeLinecap="round" />
       </svg>
       <div aria-hidden className="absolute inset-x-[18%] bottom-[4%] h-[8%] rounded-[50%] bg-electrico-500/30 blur-2xl" />
 
