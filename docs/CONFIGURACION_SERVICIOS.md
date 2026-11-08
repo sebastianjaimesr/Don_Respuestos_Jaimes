@@ -117,6 +117,29 @@ Cómo funciona una subida: el panel pide una URL firmada al backend, sube la fot
 
 En desarrollo puedes usar `ALMACENAMIENTO=local`: las fotos quedan en `backend/uploads` y se sirven en `/api/almacen-local/archivos/...`. No lo uses en Render: su disco se borra en cada despliegue.
 
-## 7. (Futuro) Un modelo de lenguaje para entender mejor el texto
+## 7. Pagos en línea (Wompi)
+
+Opcional. Sin estas llaves todo funciona igual que antes: el pedido queda con **pago pendiente** y un asesor lo confirma en Panel → Pedidos → *Registrar pago recibido*. Con las llaves, la tienda ofrece "Pago en línea (tarjeta, PSE, Nequi…)" y, al registrar el pedido, el botón **Pagar en línea** lleva al checkout de Wompi.
+
+1. Crea la cuenta del negocio en [comercios.wompi.co](https://comercios.wompi.co) (piden RUT, cámara de comercio o cédula y una cuenta bancaria a nombre del negocio).
+2. En **Desarrolladores → Programación** encontrarás dos juegos de llaves: **pruebas** (`pub_test_…`) y **producción** (`pub_prod_…`). Empieza con las de pruebas.
+3. En Render → `drj-backend` → **Environment**:
+   - `WOMPI_LLAVE_PUBLICA` = la llave pública (`pub_test_…`).
+   - `WOMPI_SECRETO_INTEGRIDAD` = el secreto de **Integridad**.
+   - `WOMPI_SECRETO_EVENTOS` = el secreto de **Eventos**.
+   - `TIENDA_URL` = la dirección pública de la tienda (por ejemplo `https://sebastianjaimesr.github.io/Don_Respuestos_Jaimes`).
+4. En Wompi, **URL de eventos**: `https://drj-backend.onrender.com/api/pagos/wompi/eventos` (cambia el dominio si tu backend está en otro).
+5. Haz una compra de prueba con las tarjetas o el Nequi de pruebas que indica la documentación de Wompi. En el panel, el pedido debe pasar a pago **Confirmado** y mostrar el pago con origen *Wompi* y su número de transacción.
+6. Cuando todo funcione, cambia las tres variables por las de **producción** y vuelve a registrar la URL de eventos en el ambiente de producción de Wompi.
+
+Cómo se protege el dinero:
+- El monto y la referencia los calcula el backend; el navegador nunca los fija. El secreto de integridad firma la URL de pago, así que nadie puede cambiar el valor a pagar.
+- Un pedido solo queda pagado cuando llega el **aviso firmado** de Wompi a la URL de eventos (se verifica con el secreto de eventos). Volver a la tienda después de pagar no confirma nada.
+- Se verifica que el monto avisado sea exactamente el del pago, que la misma transacción no pague dos pedidos y que un aviso atrasado de "rechazado" no deshaga un pago aprobado.
+- Solo se puede pagar en línea cuando el total es definitivo: si el envío está "por confirmar", el cliente espera a que un asesor lo confirme.
+
+> ⚠️ Los dos secretos solo van en Render. La llave pública sí puede verse en el navegador (va en la URL de pago).
+
+## 8. (Futuro) Un modelo de lenguaje para entender mejor el texto
 
 La v1 entiende el texto con reglas (rápido, gratis y verificable). Si más adelante quieres un LLM para frases muy libres, la forma segura es usarlo **solo para extraer** modelo, año, repuesto e intención, y seguir llamando a las mismas herramientas (`buscar_repuesto`, `registrar_pedido`, `escalar_a_humano`) para los datos. El LLM nunca debe ser la fuente de precios, stock o compatibilidad.

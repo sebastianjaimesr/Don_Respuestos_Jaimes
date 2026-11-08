@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '../../api/auth';
 import { apiAdmin, qs } from '../../api/cliente';
 import { cop, etiqueta, fecha } from '../../api/formato';
-import { Alerta, Boton, Cargando, Insignia, mensajeError, Modal, Paginacion, Selector, Tabla, Tarjeta, useCarga } from '../../componentes/ui';
+import { Alerta, Boton, Campo, Cargando, Insignia, mensajeError, Modal, Paginacion, Selector, Tabla, Tarjeta, useCarga } from '../../componentes/ui';
 import { Titulo } from './Layout';
 
 interface Fila {
@@ -231,6 +231,15 @@ function DetallePedido({ codigo, onCerrar, onCambio }: { codigo: string; onCerra
             Registrado {fecha(d.created_at)}
             {d.cotizacion_codigo && ` · desde la cotización ${d.cotizacion_codigo}`}
           </p>
+          <PagosPedido
+            codigo={codigo}
+            total={d.total}
+            puede={tiene('pedidos.gestionar') && d.estado !== 'cancelado'}
+            onCambio={async () => {
+              await det.recargar();
+              onCambio();
+            }}
+          />
           {tiene('pedidos.gestionar') && (
             <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-3">
               <div className="flex flex-wrap gap-2">
@@ -242,7 +251,7 @@ function DetallePedido({ codigo, onCerrar, onCambio }: { codigo: string; onCerra
               </div>
               {d.estado !== 'cancelado' && (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-slate-300">Pago:</span>
+                  <span className="text-slate-300">Estado del pago (a mano):</span>
                   {['pendiente', 'confirmado', 'rechazado'].map((s) => (
                     <Boton key={s} variante="secundario" tamano="sm" disabled={ocupado || d.estado_pago === s} onClick={() => cambiar({ estado_pago: s })}>
                       {etiqueta(s)}
@@ -255,5 +264,127 @@ function DetallePedido({ codigo, onCerrar, onCambio }: { codigo: string; onCerra
         </div>
       )}
     </Modal>
+  );
+}
+
+interface Pago {
+  id: number;
+  proveedor: string;
+  metodo: string | null;
+  referencia_externa: string | null;
+  transaccion: string | null;
+  monto: string;
+  estado: string;
+  created_at: string;
+  asesor: string | null;
+}
+const METODOS_MANUALES = ['nequi', 'daviplata', 'transferencia', 'efectivo', 'contraentrega'];
+
+/**
+ * Pagos del pedido: los que registra un asesor y los que confirma la pasarela con un
+ * evento firmado. El pedido queda "confirmado" cuando lo aprobado cubre el total.
+ */
+function PagosPedido({ codigo, total, puede, onCambio }: { codigo: string; total: string; puede: boolean; onCambio: () => Promise<void> }) {
+  const pagos = useCarga(() => apiAdmin<Pago[]>(`/admin/pedidos/${codigo}/pagos`), [codigo]);
+  const aprobado = (pagos.datos ?? []).filter((p) => p.estado === 'aprobado').reduce((a, p) => a + Number(p.monto), 0);
+  const saldo = Math.max(0, Number(total) - aprobado);
+  const [abierto, setAbierto] = useState(false);
+  const [f, setF] = useState({ monto: '', metodo: 'transferencia', referencia: '', estado: 'aprobado' });
+  const [error, setError] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  const registrar = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setOcupado(true);
+    try {
+      await apiAdmin(`/admin/pedidos/${codigo}/pagos`, 'POST', { monto: Number(f.monto), metodo: f.metodo, referencia: f.referencia.trim() || null, estado: f.estado });
+      setAbierto(false);
+      setF({ monto: '', metodo: 'transferencia', referencia: '', estado: 'aprobado' });
+      await pagos.recargar();
+      await onCambio();
+    } catch (err) {
+      setError(mensajeError(err));
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-white/[0.06] pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-white">Pagos</p>
+        <p className="text-xs text-gris-tec">
+          Aprobado {cop(aprobado)} de {cop(total)}
+          {saldo > 0 && ` · falta ${cop(saldo)}`}
+        </p>
+      </div>
+      {pagos.error && <Alerta>{pagos.error}</Alerta>}
+      {pagos.datos && pagos.datos.length === 0 && <p className="text-sm text-gris-tec">Todavía no hay pagos registrados.</p>}
+      {pagos.datos && pagos.datos.length > 0 && (
+        <Tabla columnas={['Fecha', 'Origen', 'Medio', 'Referencia', 'Monto', 'Estado']}>
+          {pagos.datos.map((p) => (
+            <tr key={p.id}>
+              <td className="px-2 py-2 text-xs whitespace-nowrap">{fecha(p.created_at)}</td>
+              <td className="px-2 py-2 text-xs">{p.proveedor === 'manual' ? `Asesor${p.asesor ? `: ${p.asesor}` : ''}` : etiqueta(p.proveedor)}</td>
+              <td className="px-2 py-2 text-xs">{p.metodo ? etiqueta(p.metodo) : '—'}</td>
+              <td className="px-2 py-2 font-mono text-[11px]">
+                {p.referencia_externa ?? '—'}
+                {p.transaccion && <span className="block text-gris-tec">Transacción {p.transaccion}</span>}
+              </td>
+              <td className="px-2 py-2 tabular-nums">{cop(p.monto)}</td>
+              <td className="px-2 py-2">
+                <Insignia valor={p.estado} />
+              </td>
+            </tr>
+          ))}
+        </Tabla>
+      )}
+      {puede && !abierto && (
+        <div>
+          <Boton
+            tamano="sm"
+            variante="secundario"
+            onClick={() => {
+              setF((x) => ({ ...x, monto: saldo > 0 ? String(saldo) : '' }));
+              setAbierto(true);
+            }}
+          >
+            Registrar pago recibido
+          </Boton>
+        </div>
+      )}
+      {abierto && (
+        <form onSubmit={registrar} className="grid gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-2">
+          {error && (
+            <div className="sm:col-span-2">
+              <Alerta>{error}</Alerta>
+            </div>
+          )}
+          <Campo etiqueta="Monto (COP)" type="number" min="0.01" step="0.01" required value={f.monto} onChange={(e) => setF((x) => ({ ...x, monto: e.target.value }))} />
+          <Selector etiqueta="Medio" value={f.metodo} onChange={(e) => setF((x) => ({ ...x, metodo: e.target.value }))}>
+            {METODOS_MANUALES.map((m) => (
+              <option key={m} value={m}>
+                {etiqueta(m)}
+              </option>
+            ))}
+          </Selector>
+          <Campo etiqueta="Referencia o comprobante (opcional)" value={f.referencia} onChange={(e) => setF((x) => ({ ...x, referencia: e.target.value }))} placeholder="Ej.: número de la transferencia" />
+          <Selector etiqueta="Resultado" value={f.estado} onChange={(e) => setF((x) => ({ ...x, estado: e.target.value }))}>
+            <option value="aprobado">Recibido (aprobado)</option>
+            <option value="rechazado">Rechazado</option>
+          </Selector>
+          <p className="text-xs text-gris-tec sm:col-span-2">Registra solo lo que ya verificaste en la cuenta del negocio. Queda en la auditoría con tu usuario.</p>
+          <div className="flex gap-2 sm:col-span-2">
+            <Boton type="submit" tamano="sm" disabled={ocupado}>
+              {ocupado ? 'Guardando…' : 'Guardar pago'}
+            </Boton>
+            <Boton type="button" tamano="sm" variante="secundario" onClick={() => setAbierto(false)}>
+              Cancelar
+            </Boton>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

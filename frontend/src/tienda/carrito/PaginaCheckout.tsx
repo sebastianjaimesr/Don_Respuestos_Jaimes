@@ -1,7 +1,8 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { cop } from '../../api/formato';
-import { tienda } from '../../api/tienda';
+import { tienda, type CotizacionEnvio } from '../../api/tienda';
+import { useOpcionesPago } from './PagoEnLinea';
 import { useTienda } from '../estado';
 import { AreaTexto, Boton, Campo, Contenedor, Selector, erroresPorCampo, mensajeError } from '../ui';
 
@@ -32,6 +33,28 @@ export default function PaginaCheckout() {
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const opcionesPago = useOpcionesPago();
+  // Costo de envío para la ciudad de entrega: lo calcula el servidor con las tarifas que
+  // configuró el negocio. Es el mismo cálculo que se aplica al registrar el pedido.
+  const ciudadEnvio = (f.ciudadEntrega || f.ciudad).trim();
+  const [envio, setEnvio] = useState<CotizacionEnvio | null>(null);
+  useEffect(() => {
+    if (f.modalidad !== 'envio' || ciudadEnvio.length < 3) {
+      setEnvio(null);
+      return;
+    }
+    let vivo = true;
+    const t = setTimeout(() => {
+      tienda
+        .cotizarEnvio(ciudadEnvio)
+        .then((r) => (vivo ? setEnvio(r) : undefined))
+        .catch(() => (vivo ? setEnvio(null) : undefined));
+    }, 350);
+    return () => {
+      vivo = false;
+      clearTimeout(t);
+    };
+  }, [f.modalidad, ciudadEnvio]);
   // Al registrar el pedido el carrito se vacía: esto evita que la página redirija al carrito en vez de a la confirmación.
   const registrado = useRef(false);
   const cambiar = (k: keyof typeof f) => (e: { target: { value: string } }) => {
@@ -58,7 +81,7 @@ export default function PaginaCheckout() {
         notas: f.notas || null,
       });
       registrado.current = true;
-      navegar(`/pedido/${r.pedido.codigo}`, { replace: true, state: r });
+      navegar(`/pedido/${r.pedido.codigo}`, { replace: true, state: { ...r, telefono: f.telefono } });
       olvidarCarrito();
     } catch (err) {
       const porCampo = erroresPorCampo(err);
@@ -91,7 +114,7 @@ export default function PaginaCheckout() {
               {(
                 [
                   ['recogida_tienda', 'Recojo en la tienda', 'Sin costo de envío'],
-                  ['envio', 'Envío a domicilio', 'El costo lo confirma un asesor'],
+                  ['envio', 'Envío a domicilio', 'El costo depende de la ciudad'],
                 ] as const
               ).map(([v, t, d]) => (
                 <label key={v} className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 p-4 has-[:checked]:border-electrico-400 has-[:checked]:bg-electrico-500/10">
@@ -107,6 +130,18 @@ export default function PaginaCheckout() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <Campo id="co-ciudad-env" etiqueta="Ciudad de entrega" placeholder={f.ciudad || 'Ciudad'} value={f.ciudadEntrega} onChange={cambiar('ciudadEntrega')} error={errores['entrega.ciudad']} />
                 <Campo id="co-dir" etiqueta="Dirección" autoComplete="street-address" required value={f.direccion} onChange={cambiar('direccion')} error={err('direccion')} />
+                {envio && (
+                  <p aria-live="polite" className="text-sm sm:col-span-2">
+                    {envio.costo !== null ? (
+                      <span className="text-slate-200">
+                        Envío a {envio.ciudad}: <strong className="text-white">{envio.costo === 0 ? 'gratis' : cop(envio.costo)}</strong>
+                        {envio.dias_estimados !== null && <span className="text-gris-tec"> · llega en unos {envio.dias_estimados} días hábiles</span>}
+                      </span>
+                    ) : (
+                      <span className="text-gris-tec">Aún no tenemos tarifa para {envio.ciudad}: un asesor te confirma el costo del envío antes de cobrarte.</span>
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </fieldset>
@@ -115,6 +150,7 @@ export default function PaginaCheckout() {
             <legend className="float-left mb-4 w-full font-display text-lg font-semibold text-white">Pago</legend>
             <Selector id="co-pago" etiqueta="¿Cómo quieres pagar?" value={f.metodo} onChange={cambiar('metodo')} error={errores.metodo_pago}>
               <option value="">Elige una opción</option>
+              {opcionesPago?.en_linea && <option value="en_linea">Pago en línea (tarjeta, PSE, Nequi…)</option>}
               {METODOS.map(([v, t]) => (
                 <option key={v} value={v}>
                   {t}
@@ -122,7 +158,9 @@ export default function PaginaCheckout() {
               ))}
             </Selector>
             <p className="rounded-xl bg-electrico-500/10 p-3 text-sm text-electrico-300">
-              Aquí no se hace ningún cobro. Un asesor te confirma el total y los datos de pago por WhatsApp. El pedido queda con pago pendiente hasta que lo recibamos.
+              {f.metodo === 'en_linea'
+                ? 'Al registrar el pedido te mostramos el botón para pagar en Wompi. El pago queda confirmado cuando Wompi nos avisa, no antes.'
+                : 'Aquí no se hace ningún cobro. Un asesor te confirma el total y los datos de pago por WhatsApp. El pedido queda con pago pendiente hasta que lo recibamos.'}
             </p>
             <AreaTexto id="co-notas" etiqueta="Notas (opcional)" rows={3} maxLength={500} value={f.notas} onChange={cambiar('notas')} placeholder="Ej.: modelo y año exacto de tu moto" />
           </fieldset>
@@ -144,7 +182,21 @@ export default function PaginaCheckout() {
             <span className="text-gris-tec">Subtotal</span>
             <span className="font-semibold text-white">{cop(carrito.subtotal)}</span>
           </div>
-          {f.modalidad === 'envio' && <p className="text-xs text-gris-tec">Más el envío, que te confirma un asesor.</p>}
+          {f.modalidad === 'envio' &&
+            (envio?.costo != null ? (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gris-tec">Envío</span>
+                  <span className="text-white">{envio.costo === 0 ? 'Gratis' : cop(envio.costo)}</span>
+                </div>
+                <div className="flex justify-between border-t border-white/10 pt-3 text-sm">
+                  <span className="text-gris-tec">Total</span>
+                  <span className="font-semibold text-white">{cop(Number(carrito.subtotal) + envio.costo)}</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gris-tec">Más el envío, que te confirma un asesor.</p>
+            ))}
           <label className="flex items-start gap-3 text-sm text-slate-200">
             <input type="checkbox" checked={f.confirmo} onChange={(e) => {
               const v = e.target.checked;

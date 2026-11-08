@@ -1,3 +1,4 @@
+import { pagosDePedido, recalcularEstadoPago } from '../../modulos/pagos/servicio';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool, enTransaccion, moverStock } from '../../db';
@@ -98,13 +99,7 @@ r.get(
   '/pedidos/:codigo/pagos',
   ver,
   h(async (req, res) => {
-    const { rows } = await pool.query(
-      `SELECT pg.id, pg.proveedor, pg.metodo, pg.referencia_externa, pg.monto, pg.estado, pg.created_at, a.nombre AS asesor
-       FROM pagos pg JOIN pedidos pe ON pe.id = pg.pedido_id LEFT JOIN asesores a ON a.id = pg.asesor_id
-       WHERE pe.codigo = $1 ORDER BY pg.id`,
-      [String(req.params.codigo)],
-    );
-    ok(res, rows);
+    ok(res, await pagosDePedido(String(req.params.codigo)));
   }),
 );
 r.post(
@@ -135,11 +130,8 @@ r.post(
         if ((e as { code?: string }).code === '23505') throw new AppError(409, 'PAGO_DUPLICADO', 'Ya se registró un pago con esa referencia');
         throw e;
       }
-      const suma = (await db.query(`SELECT COALESCE(SUM(monto), 0) AS s FROM pagos WHERE pedido_id = $1 AND estado = 'aprobado'`, [pe.id])).rows[0].s;
-      // El pago queda "confirmado" solo cuando lo aprobado cubre el total
-      const estadoPago = aCentavos(String(suma)) >= aCentavos(pe.total) ? 'confirmado' : 'pendiente';
-      await db.query('UPDATE pedidos SET estado_pago = $2 WHERE id = $1', [pe.id, estadoPago]);
-      return { pago, estado_pago: estadoPago, pagado: suma, total: pe.total };
+      const r3 = await recalcularEstadoPago(db, pe.id);
+      return { pago, ...r3 };
     }, { usuarioId: req.usuario!.id });
     ok(res, r2, 201);
   }),

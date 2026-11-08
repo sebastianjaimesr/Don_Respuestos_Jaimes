@@ -235,7 +235,7 @@ Convenciones actuales que se mantienen: prefijo `/api`, respuesta `{ ok: true, d
 
 ### 4.3 Panel (cookie de sesión de asesor + permiso)
 
-> **Estado (fase 5):** todas las áreas de esta tabla funcionan y tienen pantalla en el panel (§ 11.3). Las imágenes necesitan las credenciales de Supabase (o `ALMACENAMIENTO=local` en desarrollo). Las tarifas de envío ya se administran, pero el checkout sigue usando `costo_envio` de la configuración hasta la fase 7.
+> **Estado (fase 5):** todas las áreas de esta tabla funcionan y tienen pantalla en el panel (§ 11.3). Las imágenes necesitan las credenciales de Supabase (o `ALMACENAMIENTO=local` en desarrollo). Desde la fase 7 el checkout, el asistente y las cotizaciones calculan el envío con las tarifas por ciudad (§ 10).
 
 Cada ruta exige un permiso (§ 5.2). Las escrituras quedan en `auditoria`.
 
@@ -446,9 +446,15 @@ stateDiagram-v2
 
 - El carrito siempre se recalcula en el servidor: precio vigente (con promoción), stock y precio confirmado.
 - El checkout reutiliza `registrarPedido` (idempotencia, `FOR UPDATE`, venta de la última unidad probada).
-- Envío: costo de `tarifas_envio` para la ciudad; si la ciudad no tiene tarifa, el pedido queda con envío "por confirmar" (regla actual `envio_confirmado`).
+> **Estado (fase 7):** implementado.
+
+- Envío: costo de `tarifas_envio` para la ciudad (sin importar tildes ni mayúsculas; `GET /api/envios/cotizar?ciudad=` da el mismo cálculo que se aplica al pedido, y el checkout lo muestra antes de confirmar). Si la ciudad no tiene tarifa, se usa `costo_envio` de la configuración solo si está confirmado; si no, el pedido queda con envío "por confirmar" (`envio_confirmado = false`). Si la misma ciudad tiene dos tarifas distintas (dos departamentos), no se adivina: queda por confirmar.
 - **WhatsApp:** tras registrar el pedido, el cliente ve el número `PED-xxxxxx` y un botón que abre `wa.me/<número del negocio>` con el resumen. El número sale de `configuracion_negocio`.
-- **Pagos:** `estado_pago` sigue en `pendiente` hasta que un asesor registra el pago manual. La tabla `pagos` y la interfaz `PasarelaPagos` (`crearIntencion`, `verificarWebhook`) quedan listas para Wompi o PayU; ningún flujo marca un pago como exitoso sin confirmación del proveedor o de un asesor.
+- **Pagos:** `estado_pago` sigue en `pendiente` hasta que lo aprobado en `pagos` cubre el total. Un pago se aprueba de dos formas, nunca de otra:
+  - **Asesor:** Panel → Pedidos → *Registrar pago recibido* (`POST /api/admin/pedidos/:codigo/pagos`), con medio, referencia y su usuario en la auditoría.
+  - **Wompi:** si las tres llaves están en el entorno, la tienda ofrece pago en línea. `POST /api/pedidos/:codigo/pago-en-linea` (con el celular del pedido) crea un intento en `pagos` con una referencia nueva y devuelve la URL del Web Checkout firmada con el secreto de integridad; el monto es el saldo calculado en el servidor. Solo se permite con total definitivo (envío confirmado). Wompi avisa a `POST /api/pagos/wompi/eventos`; el aviso se acepta solo si su checksum (SHA256 de las propiedades firmadas + timestamp + secreto de eventos) coincide, el monto es exactamente el del intento, la transacción no pagó otro pedido y no intenta deshacer un pago ya aprobado. Volver de Wompi a la tienda no cambia nada.
+  - `modulos/pagos/pasarela.ts` define la interfaz `PasarelaPagos` (`crearIntencion`, `verificarEvento`); `wompi.ts` es la única implementación. PayU o Mercado Pago serían otra implementación de la misma interfaz.
+  - Sin llaves: `GET /api/pagos/opciones` responde `en_linea: false`, la tienda no muestra la opción, el checkout rechaza `en_linea` y el webhook responde 503.
 
 ---
 
@@ -550,11 +556,12 @@ Cada módulo expone servicios con SQL; las rutas solo validan, llaman al servici
 | `005_auditoria_precios.sql` | `auditoria`, `historial_precios`, triggers, protección de `inventario.cantidad` |
 | `006_roles_permisos.sql` | Roles, permisos y matriz inicial; FK desde `asesores.rol` |
 | `007_clientes_carrito.sql` | Cuenta de cliente, carritos, favoritos, `canal` y `carrito_id` en pedidos, `pagos` |
-| `008_comercial.sql` | Promociones y tabla `tarifas_envio` (vacía: el costo sigue saliendo de `costo_envio` en configuración, que el dueño aún no confirma; el servicio pasará a la tabla en la fase 7) |
+| `008_comercial.sql` | Promociones y tabla `tarifas_envio` (desde la fase 7 es la fuente del costo de envío; `costo_envio` de configuración queda como respaldo) |
 | `009_importaciones.sql` | Importaciones y errores |
 | `010_busqueda.sql` | `pg_trgm`, `f_normalizar`, `busqueda tsvector`, índices |
 | `011_tienda.sql` | `clientes.cuenta_creada_at` (el historial de la cuenta solo muestra pedidos hechos desde que se abrió, porque el teléfono no se verifica por SMS), clave `whatsapp_ventas` sin confirmar, reindexación de la búsqueda al cambiar nombre o sinónimos de una categoría o marca, `fuzzystrmatch` + `f_coincide_aprox` para errores de digitación ("bugia" → bujía) |
 | `012_promociones_vigentes.sql` | Vista `v_precio_vigente`: el precio que se cobra (con la mejor promoción vigente, sin sumar descuentos, nunca ≤ 0 ni para productos sin precio). La usan catálogo, carrito, asistente y pedido |
+| `013_pago_en_linea.sql` | `en_linea` como medio de pago del pedido (solo se acepta si Wompi está configurado) |
 
 Las columnas viejas (`productos.categoria`, `modelos_motocicleta.fabricante`, `marcas.tipo`) se rellenan en sus reemplazos y se quitan en la misma migración 003, porque en el mismo pull request todo el código se adaptó. Las migraciones se prueban de dos formas: sobre una base vacía y sobre una base con el esquema 001–002 y los datos demo anteriores (como está hoy en Render).
 

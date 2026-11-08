@@ -5,6 +5,7 @@ import { config } from './config';
 import { manejadorErrores } from './errores';
 import { rutasPublicas } from './rutas/publicas';
 import { rutasIntegraciones } from './rutas/integraciones';
+import { rutasPagos } from './rutas/pagos';
 import { rutasAdmin } from './rutas/admin';
 import { rutasTienda } from './rutas/tienda';
 import { rutasAlmacenLocal } from './rutas/almacenLocal';
@@ -46,6 +47,7 @@ export function crearApp() {
   app.use('/api', rutasPublicas);
   app.use('/api', rutasTienda);
   app.use('/api', rutasIntegraciones);
+  app.use('/api', rutasPagos);
   app.use('/api', rutasAdmin);
 
   app.use('/api', (_req, res) => res.status(404).json({ ok: false, error: { codigo: 'RUTA_NO_ENCONTRADA', mensaje: 'Ruta no encontrada' } }));

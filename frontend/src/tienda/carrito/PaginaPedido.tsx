@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { cop, etiqueta, fecha } from '../../api/formato';
 import { tienda, type PedidoCreado } from '../../api/tienda';
 import { Boton, Campo, Contenedor, mensajeError } from '../ui';
+import { PagoEnLinea } from './PagoEnLinea';
 
 type Seguimiento = Awaited<ReturnType<typeof tienda.seguimiento>>;
 
@@ -19,6 +20,7 @@ export default function PaginaPedido() {
 
 function Confirmacion({ r }: { r: PedidoCreado }) {
   const p = r.pedido;
+  const totalDefinitivo = p.modalidad_entrega !== 'envio' || p.envio_confirmado;
   return (
     <Contenedor className="max-w-3xl py-10">
       <div className="vidrio rounded-3xl p-6 text-center sm:p-8">
@@ -29,7 +31,8 @@ function Confirmacion({ r }: { r: PedidoCreado }) {
         <p className="mt-2 text-slate-300">
           Tu código es <strong className="font-mono text-white">{p.codigo}</strong>. Guárdalo para consultar el estado.
         </p>
-        <p className="mt-3 text-sm text-amber-100">El pago está pendiente: todavía no se ha cobrado nada. Un asesor te confirma el total y cómo pagar.</p>
+        <p className="mt-3 text-sm text-amber-100">El pago está pendiente: todavía no se ha cobrado nada.</p>
+        {r.telefono && <PagoEnLinea codigo={p.codigo} telefono={r.telefono} estadoPago={p.estado_pago} total={p.total} totalDefinitivo={totalDefinitivo} />}
         {r.whatsapp ? (
           <a
             href={r.whatsapp}
@@ -82,6 +85,8 @@ function Confirmacion({ r }: { r: PedidoCreado }) {
 }
 
 function ConsultarPedido({ codigoInicial }: { codigoInicial: string }) {
+  // Wompi devuelve aquí al cliente. Eso NO confirma el pago: lo confirma el aviso firmado de Wompi.
+  const volvioDePagar = useSearchParams()[0].get('pago') === 'volvio';
   const [codigo, setCodigo] = useState(codigoInicial);
   const [telefono, setTelefono] = useState('');
   const [r, setR] = useState<Seguimiento | null>(null);
@@ -103,6 +108,11 @@ function ConsultarPedido({ codigoInicial }: { codigoInicial: string }) {
   return (
     <Contenedor className="max-w-xl py-10">
       <h1 className="font-display text-2xl font-bold text-white">Consultar mi pedido</h1>
+      {volvioDePagar && (
+        <p role="status" className="mt-3 rounded-xl bg-electrico-500/10 p-3 text-sm text-electrico-300">
+          Volviste de Wompi. El pago se marca como recibido cuando Wompi nos lo confirma, normalmente en pocos minutos. Consulta el pedido para ver el estado.
+        </p>
+      )}
       <p className="mt-2 text-sm text-gris-tec">Escribe el código del pedido y el celular con el que lo registraste.</p>
       <form onSubmit={consultar} className="vidrio mt-6 space-y-4 rounded-3xl p-5 sm:p-6">
         <Campo id="sg-codigo" etiqueta="Código del pedido" required value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="PED-…" />
@@ -117,6 +127,7 @@ function ConsultarPedido({ codigoInicial }: { codigoInicial: string }) {
         )}
       </form>
       {r && (
+        <>
         <dl className="vidrio mt-6 space-y-2 rounded-3xl p-5 text-sm sm:p-6" aria-live="polite">
           {(
             [
@@ -134,6 +145,8 @@ function ConsultarPedido({ codigoInicial }: { codigoInicial: string }) {
             </div>
           ))}
         </dl>
+        <PagoEnLinea codigo={r.codigo} telefono={telefono.trim()} estadoPago={r.estado_pago} total={r.total} totalDefinitivo={r.modalidad_entrega !== 'envio' || r.envio_confirmado} />
+        </>
       )}
     </Contenedor>
   );

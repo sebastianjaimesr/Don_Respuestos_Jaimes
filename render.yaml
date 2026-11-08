@@ -45,6 +45,17 @@ services:
         sync: false
       - key: SUPABASE_BUCKET
         value: productos
+      # Pagos en línea con Wompi (docs/CONFIGURACION_SERVICIOS.md § 7). Vacías = sin pago en línea:
+      # el pedido queda con pago pendiente y lo confirma un asesor.
+      - key: WOMPI_LLAVE_PUBLICA
+        sync: false
+      - key: WOMPI_SECRETO_INTEGRIDAD
+        sync: false
+      - key: WOMPI_SECRETO_EVENTOS
+        sync: false
+      # URL pública de la tienda (para volver al pedido después de pagar), p. ej. https://sebastianjaimesr.github.io/Don_Respuestos_Jaimes
+      - key: TIENDA_URL
+        sync: false
 
 databases:
   - name: drj-db

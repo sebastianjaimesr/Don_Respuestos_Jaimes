@@ -100,6 +100,7 @@ const COLOR_ESTADO: Record<string, keyof typeof COLORES> = {
   cancelado: 'gris',
   pendiente: 'amarillo',
   rechazado: 'rojo',
+  aprobado: 'verde',
   reembolsado: 'gris',
   emitida: 'azul',
   aceptada: 'verde',

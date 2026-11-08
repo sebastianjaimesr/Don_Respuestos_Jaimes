@@ -121,6 +121,20 @@ export interface PedidoCreado {
     idempotente?: boolean;
   };
   whatsapp: string | null;
+  /** Solo en el estado de navegación del checkout: permite pedir el enlace de pago sin volver a escribirlo. */
+  telefono?: string;
+}
+
+export interface CotizacionEnvio {
+  ciudad: string;
+  costo: number | null;
+  dias_estimados: number | null;
+  fuente: 'tarifa' | 'configuracion' | null;
+}
+export interface OpcionesPago {
+  en_linea: boolean;
+  proveedor: 'wompi' | null;
+  modo_pruebas: boolean;
 }
 
 export interface Cliente {
@@ -151,6 +165,12 @@ export const tienda = {
     api<{ codigo: string; estado: string; estado_pago: string; modalidad_entrega: string; total: string; envio_confirmado: boolean; created_at: string }>(
       `/pedidos/seguimiento${qs({ codigo, telefono })}`,
     ),
+
+  cotizarEnvio: (ciudad: string) => api<CotizacionEnvio>(`/envios/cotizar${qs({ ciudad })}`),
+  opcionesPago: () => api<OpcionesPago>('/pagos/opciones'),
+  /** Crea el enlace de pago en la pasarela. El monto lo calcula el servidor. */
+  pagoEnLinea: (codigo: string, telefono: string) =>
+    api<{ url: string; referencia: string; monto_centavos: number }>(`/pedidos/${encodeURIComponent(codigo)}/pago-en-linea`, { metodo: 'POST', cuerpo: { telefono } }),
 
   registro: (d: { nombre: string; email: string; telefono: string; password: string; ciudad?: string }) =>
     api<{ cliente: Cliente; csrf: string }>('/clientes/registro', { metodo: 'POST', cuerpo: d }),

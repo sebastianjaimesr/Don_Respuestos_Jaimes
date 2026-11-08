@@ -29,6 +29,16 @@ const esquema = z.object({
   SUPABASE_BUCKET: z.string().regex(/^[a-z0-9_-]{3,63}$/).default('productos'),
   /** Carpeta para el modo local (desarrollo y pruebas). */
   ALMACENAMIENTO_LOCAL_DIR: z.string().default('uploads'),
+  // Pagos en línea con Wompi (docs/ARQUITECTURA.md § 10). Sin las tres llaves, la tienda
+  // no ofrece pago en línea: el pedido queda con pago pendiente y lo confirma un asesor.
+  /** Llave pública (pub_test_… en pruebas, pub_prod_… en producción). Se puede ver en el navegador. */
+  WOMPI_LLAVE_PUBLICA: z.string().regex(/^pub_(test|prod)_[A-Za-z0-9]+$/, 'Debe empezar por pub_test_ o pub_prod_').optional(),
+  /** Secreto de integridad: firma el monto y la referencia para que nadie los cambie. SOLO backend. */
+  WOMPI_SECRETO_INTEGRIDAD: z.string().min(10).optional(),
+  /** Secreto de eventos: verifica que los avisos de pago vienen de Wompi. SOLO backend. */
+  WOMPI_SECRETO_EVENTOS: z.string().min(10).optional(),
+  /** URL pública de la tienda, para volver a la página del pedido después de pagar. */
+  TIENDA_URL: z.string().url().optional(),
 });
 
 const vaciosComoUndefined = Object.fromEntries(
@@ -40,6 +50,13 @@ const resultado = esquema
     message: 'Con ALMACENAMIENTO=supabase debes definir SUPABASE_URL y SUPABASE_SERVICE_KEY',
     path: ['ALMACENAMIENTO'],
   })
+  .refine(
+    (c) => {
+      const n = [c.WOMPI_LLAVE_PUBLICA, c.WOMPI_SECRETO_INTEGRIDAD, c.WOMPI_SECRETO_EVENTOS].filter(Boolean).length;
+      return n === 0 || n === 3;
+    },
+    { message: 'Para Wompi define las tres: WOMPI_LLAVE_PUBLICA, WOMPI_SECRETO_INTEGRIDAD y WOMPI_SECRETO_EVENTOS', path: ['WOMPI_LLAVE_PUBLICA'] },
+  )
   .safeParse(vaciosComoUndefined);
 if (!resultado.success) {
   // No imprimimos los valores, solo qué variable falla (evita filtrar secretos)
