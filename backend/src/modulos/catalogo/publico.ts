@@ -71,6 +71,11 @@ class Params {
   }
 }
 
+async function hayPromocionesVigentes(): Promise<boolean> {
+  const { rows } = await pool.query(`SELECT EXISTS (SELECT 1 FROM promociones WHERE activo AND now() >= inicia_at AND now() < termina_at) AS hay`);
+  return rows[0].hay;
+}
+
 export async function listarProductos(f: FiltrosCatalogo) {
   await asegurarCategorias();
   const pr = new Params();
@@ -85,8 +90,8 @@ export async function listarProductos(f: FiltrosCatalogo) {
       p.sku = upper(regexp_replace(btrim(${q}), '\\s+', '-', 'g')) OR upper(btrim(p.referencia)) = upper(btrim(${q}))
       OR p.codigo_barras = btrim(${q})
       OR p.busqueda @@ plainto_tsquery('spanish', f_normalizar(${q}))
-      OR word_similarity(f_normalizar(${q}), f_normalizar(p.nombre)) > 0.45
-      OR f_coincide_aprox(${q}, p.nombre)
+      OR f_normalizar(${q}) <% f_normalizar(p.nombre)
+      OR to_tsvector('simple', f_normalizar(p.nombre)) @@ (SELECT f_consulta_aprox(${q}))
     )`);
     relevancia = `(CASE WHEN p.sku = upper(regexp_replace(btrim(${q}), '\\s+', '-', 'g')) OR upper(btrim(p.referencia)) = upper(btrim(${q})) OR p.codigo_barras = btrim(${q}) THEN 10 ELSE 0 END
       + ts_rank(p.busqueda, plainto_tsquery('spanish', f_normalizar(${q})))
@@ -100,8 +105,12 @@ export async function listarProductos(f: FiltrosCatalogo) {
   }
   if (f.marca) where.push(`p.marca_id = ${pr.add(f.marca)}`);
   if (f.tipo) where.push(`p.tipo = ${pr.add(f.tipo)}`);
-  if (f.precio_min !== undefined) where.push(`vp.precio >= ${pr.add(f.precio_min)}`);
-  if (f.precio_max !== undefined) where.push(`vp.precio <= ${pr.add(f.precio_max)}`);
+  // Sin promociones vigentes, el precio vigente ES el precio de lista: se filtra y ordena por
+  // p.precio, que tiene índice, en vez de calcular la vista para todo el catálogo.
+  const usaPrecio = f.precio_min !== undefined || f.precio_max !== undefined || f.orden === 'precio_asc' || f.orden === 'precio_desc';
+  const precio = usaPrecio && (await hayPromocionesVigentes()) ? 'vp.precio' : 'p.precio';
+  if (f.precio_min !== undefined) where.push(`${precio} >= ${pr.add(f.precio_min)}`);
+  if (f.precio_max !== undefined) where.push(`${precio} <= ${pr.add(f.precio_max)}`);
   if (f.disponible === 'true') where.push(`e.estado IN ('disponible', 'stock_bajo')`);
   if (f.destacado === 'true') where.push('p.destacado');
 
@@ -120,20 +129,37 @@ export async function listarProductos(f: FiltrosCatalogo) {
   }
 
   const orden = {
-    relevancia: f.q ? `${relevancia} DESC, p.destacado DESC, p.nombre` : 'p.destacado DESC, (vp.precio IS NULL), p.nombre, p.id',
-    precio_asc: 'vp.precio ASC NULLS LAST, p.nombre',
-    precio_desc: 'vp.precio DESC NULLS LAST, p.nombre',
+    // (p.precio IS NULL) equivale a (vp.precio IS NULL): sin precio no hay promoción. Así usa el índice ix_productos_orden_catalogo.
+    relevancia: f.q ? `${relevancia} DESC, p.destacado DESC, p.nombre, p.id` : 'p.destacado DESC, (p.precio IS NULL), p.nombre, p.id',
+    precio_asc: `${precio} ASC NULLS LAST, p.nombre, p.id`,
+    precio_desc: `${precio} DESC NULLS LAST, p.nombre, p.id`,
     nombre: 'p.nombre, p.id',
     recientes: 'p.created_at DESC, p.id DESC',
   }[f.orden];
 
   const sqlWhere = `WHERE ${where.join(' AND ')}`;
   const offset = (f.pagina - 1) * f.tamano;
-  const [lista, total] = await Promise.all([
-    pool.query(`SELECT ${TARJETA} ${DESDE} ${sqlWhere} ORDER BY ${orden} LIMIT ${f.tamano} OFFSET ${offset}`, pr.valores),
-    pool.query(`SELECT COUNT(*)::int AS n ${DESDE} ${sqlWhere}`, pr.valores),
+  // Dos pasos: primero los ids de la página uniendo SOLO lo que usan los filtros y el orden
+  // (cada vista tiene exactamente una fila por producto, así que quitarla no cambia el
+  // resultado); después la tarjeta completa de esos 24. Con todo unido, PostgreSQL llegaba a
+  // calcular precio y stock de todo el catálogo antes de filtrar (medido en la fase 8).
+  const ordenPorPrecio = f.orden === 'precio_asc' || f.orden === 'precio_desc';
+  const desde = [
+    'FROM productos p',
+    f.categoria ? 'JOIN categorias cat ON cat.id = p.categoria_id' : '',
+    f.disponible === 'true' ? 'JOIN v_estado_inventario e ON e.producto_id = p.id' : '',
+    precio === 'vp.precio' ? 'JOIN v_precio_vigente vp ON vp.producto_id = p.id' : '',
+  ].join(' ');
+  const desdeTotal = precio === 'vp.precio' && ordenPorPrecio && f.precio_min === undefined && f.precio_max === undefined ? desde.replace(/ JOIN v_precio_vigente vp ON vp\.producto_id = p\.id/, '') : desde;
+  const [pagina, total] = await Promise.all([
+    pool.query(`SELECT p.id ${desde} ${sqlWhere} ORDER BY ${orden} LIMIT ${f.tamano} OFFSET ${offset}`, pr.valores),
+    pool.query(`SELECT COUNT(*)::int AS n ${desdeTotal} ${sqlWhere}`, pr.valores),
   ]);
-  return { items: lista.rows.map(aTarjeta), total: total.rows[0].n as number, pagina: f.pagina, tamano: f.tamano };
+  const ids: number[] = pagina.rows.map((r) => r.id);
+  const tarjetas = ids.length ? (await pool.query(`SELECT ${TARJETA} ${DESDE} WHERE p.id = ANY($1::int[])`, [ids])).rows : [];
+  const porId = new Map(tarjetas.map((t) => [t.id as number, t]));
+  const items = ids.map((id) => porId.get(id)).filter(Boolean).map((t) => aTarjeta(t!));
+  return { items, total: total.rows[0].n as number, pagina: f.pagina, tamano: f.tamano };
 }
 
 export async function detalleProducto(slug: string) {
@@ -200,7 +226,7 @@ export async function sugerencias(q: string) {
   const [prods, motos, cats] = await Promise.all([
     pool.query(
       `SELECT p.slug, p.nombre, p.sku FROM productos p
-       WHERE p.activo AND (p.busqueda @@ plainto_tsquery('spanish', f_normalizar($1)) OR word_similarity(f_normalizar($1), f_normalizar(p.nombre)) > 0.45 OR f_coincide_aprox($1, p.nombre)
+       WHERE p.activo AND (p.busqueda @@ plainto_tsquery('spanish', f_normalizar($1)) OR f_normalizar($1) <% f_normalizar(p.nombre) OR to_tsvector('simple', f_normalizar(p.nombre)) @@ (SELECT f_consulta_aprox($1))
                            OR p.sku ILIKE upper(regexp_replace(btrim($1), '\\s+', '-', 'g')) || '%')
        ORDER BY ts_rank(p.busqueda, plainto_tsquery('spanish', f_normalizar($1))) DESC, p.nombre LIMIT 6`,
       [t],

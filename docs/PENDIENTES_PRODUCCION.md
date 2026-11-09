@@ -66,3 +66,10 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - ✅ `CHECK` en base de datos: stock y cantidades nunca negativos, totales cuadrados, un producto es original si y solo si su marca es la del fabricante de la moto (trigger), y el stock solo cambia con un movimiento registrado (`fn_mover_stock`).
 - ✅ Bitácora de movimientos de inventario y de eventos (sin teléfonos, direcciones ni secretos).
 - ✅ El chat no guarda mensajes que parezcan números de tarjeta y advierte al cliente.
+
+## Rendimiento (fase 8)
+
+- [x] Búsqueda medida con 50.000 productos sintéticos: 2–90 ms en la tienda (docs/ARQUITECTURA.md § 7).
+- [ ] Con promociones vigentes, ordenar o filtrar por precio todo el catálogo sin otro filtro tarda 0,3–0,5 s. Solo importa si el catálogo real llega a decenas de miles de productos.
+- [ ] Repetir la medición en el PostgreSQL de producción (Render u otro) con `npm run medir-busqueda`, sobre una copia de la base, no la real.
+

@@ -36,7 +36,7 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       # Fotos de productos en Supabase Storage (docs/CONFIGURACION_SERVICIOS.md § 6).
-      # Mientras no las llenes, el panel avisa que las imágenes no están configuradas.
+      # Mientras no las llenes, el servidor arranca igual y el panel avisa que las imágenes no están configuradas.
       - key: ALMACENAMIENTO
         value: supabase
       - key: SUPABASE_URL

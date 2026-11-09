@@ -16,6 +16,8 @@ El archivo [`render.yaml`](../render.yaml) (un *Blueprint*) le dice a Render qu�
 | `CARGAR_DEMO` | `true`: carga los productos FICTICIOS `DEMO-*` para probar |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Te los pide Render al crear; con ellos se crea el primer administrador |
 
+| Fotos, pagos e IA | Variables vacías (`sync: false`): las llenas tú cuando tengas las llaves. Ver [Servicios opcionales](#paso-4--servicios-opcionales) |
+
 Cada vez que el servicio arranca, `npm run preparar -w backend` aplica migraciones pendientes, carga el demo (si `CARGAR_DEMO=true`; no duplica nada) y crea el administrador **solo si todavía no existe ninguno**.
 
 ## Paso 1 — Crear todo en Render
@@ -56,6 +58,36 @@ Con eso desaparece el aviso amarillo y el chat responde.
 ## Paso 3 — CORS
 
 Ya viene listo en `render.yaml` (`CORS_ORIGENES=https://sebastianjaimesr.github.io`). Si algún día usas otro dominio, agrégalo separado por coma en **Environment** del servicio.
+
+## Paso 4 — Servicios opcionales
+
+Todo arranca sin estas llaves; cada servicio se activa cuando llenas sus variables en **Environment** (el servicio se reinicia solo). Los pasos para sacar cada llave están en [CONFIGURACION_SERVICIOS.md](CONFIGURACION_SERVICIOS.md).
+
+| Servicio | Variables | Sin ellas |
+|---|---|---|
+| Fotos de productos (Supabase Storage, § 6) | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (`ALMACENAMIENTO=supabase` ya viene puesto) | El servidor arranca y el panel avisa que las imágenes no están configuradas; el log muestra `⚠ ALMACENAMIENTO=supabase sin …` |
+| Pago en línea (Wompi, § 7) | `WOMPI_LLAVE_PUBLICA`, `WOMPI_SECRETO_INTEGRIDAD`, `WOMPI_SECRETO_EVENTOS` (las tres) y `TIENDA_URL` | La tienda no ofrece pago en línea; el pedido queda con pago pendiente |
+| Jaimes AI (Claude, § 8) | `ANTHROPIC_API_KEY` (los `IA_*` ya tienen valor) | El chat responde con el motor de reglas |
+
+> ⚠️ Estas llaves son secretos: solo van en Render, nunca en GitHub ni en el frontend.
+
+## Paso 5 — Comprobar el despliegue
+
+1. `https://TU-URL/api/salud` responde `"base_datos":"ok"`.
+2. En **Logs** del último arranque aparece `Base de datos al día.` (migraciones aplicadas, hasta la `014_rendimiento_busqueda.sql`).
+3. La tienda (`https://sebastianjaimesr.github.io/Don_Respuestos_Jaimes/`) muestra el catálogo y el chat responde.
+4. Entra al panel con tu administrador y revisa **Configuración**: confirma `whatsapp_ventas`, `costo_envio` y las tarifas por ciudad.
+
+## Rendimiento de la búsqueda
+
+Medido con 50.000 productos sintéticos (fase 8): las búsquedas de la tienda tardan entre 2 y 90 ms. Para repetir la medición en una base **de pruebas** (nunca la de producción):
+
+```bash
+createdb drj_bench
+DATABASE_URL=postgres://…/drj_bench JWT_SECRET=… npm run db:migrar
+psql postgres://…/drj_bench -v n=50000 -f database/benchmarks/catalogo_sintetico.sql   # agrega -v promos=1 para medir con promociones
+DATABASE_URL=postgres://…/drj_bench JWT_SECRET=… npm run medir-busqueda -w backend
+```
 
 ## Ojo con el plan gratis
 

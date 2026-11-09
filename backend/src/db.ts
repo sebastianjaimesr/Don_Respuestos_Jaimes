@@ -14,6 +14,12 @@ export const pool = new Pool({ connectionString: config.DATABASE_URL, max: 10 })
 // y abre otra. Sin este manejador, ese evento tumbaría todo el servidor.
 pool.on('error', (e) => console.error(`Conexión inactiva con PostgreSQL cerrada: ${e.message}`));
 
+// Búsqueda por parecido de palabras (operador <% de pg_trgm, con índice): mismo umbral que
+// usaba word_similarity(...) > 0.45. Se fija en cada conexión nueva, antes de cualquier consulta.
+pool.on('connect', (c) => {
+  c.query('SET pg_trgm.word_similarity_threshold = 0.45').catch((e) => console.error(`No se pudo fijar el umbral de búsqueda: ${e.message}`));
+});
+
 export type Consultor = Pick<PoolClient, 'query'>;
 
 export interface OpcionesTransaccion {
