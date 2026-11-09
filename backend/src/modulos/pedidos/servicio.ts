@@ -4,10 +4,11 @@ import { AppError } from '../../errores';
 import { calcularLineas } from '../ventas/lineas';
 import { upsertCliente } from '../clientes/servicio';
 import { costoEnvioConfirmado } from '../negocio/servicio';
+import { pasarelaActiva } from '../pagos/servicio';
 import { registrarEvento } from '../eventos/servicio';
 import { normalizarTelefono } from '../../utils/texto';
 
-export const METODOS_PAGO = ['nequi', 'daviplata', 'transferencia', 'efectivo', 'contraentrega'] as const;
+export const METODOS_PAGO = ['nequi', 'daviplata', 'transferencia', 'efectivo', 'contraentrega', 'en_linea'] as const;
 
 export const esquemaRegistrarPedido = z
   .object({
@@ -65,6 +66,12 @@ export async function registrarPedido(entradaCruda: unknown, opciones: OpcionesP
   const entrada = esquemaRegistrarPedido.parse(entradaCruda);
   if (entrada.confirmado_por_cliente !== true) {
     throw new AppError(400, 'CONFIRMACION_REQUERIDA', 'El cliente debe confirmar explícitamente el pedido antes de registrarlo');
+  }
+
+  if (entrada.metodo_pago === 'en_linea' && !pasarelaActiva()) {
+    throw new AppError(422, 'PAGO_EN_LINEA_NO_DISPONIBLE', 'El pago en línea no está activo; elige otro medio de pago', [
+      { campo: 'metodo_pago', mensaje: 'El pago en línea no está activo; elige otro medio de pago' },
+    ]);
   }
 
   const existente = await buscarPorClave(entrada.clave_idempotencia);

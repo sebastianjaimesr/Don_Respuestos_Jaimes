@@ -41,7 +41,7 @@ export default function Envios() {
         Tarifas de envío
       </Titulo>
       <div className="mb-4">
-        <Alerta tipo="info">Por ahora el checkout de la tienda usa el costo de envío general de Configuración (o lo deja "por confirmar"). Estas tarifas por ciudad se conectan al checkout en la fase 7.</Alerta>
+        <Alerta tipo="info">La tienda, el asistente y las cotizaciones cobran el envío con estas tarifas según la ciudad de entrega (sin importar tildes). Si una ciudad no está aquí, se usa el costo general de Configuración si está confirmado; si no, el envío queda "por confirmar" y un asesor lo define.</Alerta>
       </div>
       <Tarjeta>
         <Tabla columnas={['Ciudad', 'Departamento', 'Costo', 'Días', 'Estado', '']} vacio={!lista.datos.length}>

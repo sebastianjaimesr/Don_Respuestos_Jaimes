@@ -11,6 +11,8 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - [ ] Confirmar en Panel → Configuración: dirección, ciudades de envío, transportadoras, costo de envío, contacto humano, vigencia de cotizaciones, medios de pago.
 - [ ] Confirmar en Panel → Configuración el número de **WhatsApp de ventas** (`whatsapp_ventas`, solo dígitos con 57). Mientras no esté confirmado, el checkout de la tienda registra el pedido pero no muestra el botón de WhatsApp.
 - [ ] Crear el bucket de Supabase y poner `SUPABASE_URL` y `SUPABASE_SERVICE_KEY` en Render para subir fotos ([CONFIGURACION_SERVICIOS.md § 6](CONFIGURACION_SERVICIOS.md)).
+- [ ] Cargar las **tarifas de envío** por ciudad en Panel → Tarifas de envío. Una ciudad sin tarifa queda con envío "por confirmar" (o usa `costo_envio` de Configuración si está confirmado).
+- [ ] (Opcional) Activar pagos en línea con Wompi: llaves en Render y URL de eventos ([CONFIGURACION_SERVICIOS.md § 7](CONFIGURACION_SERVICIOS.md)). Sin esto, los pagos los registra un asesor.
 - [ ] Revisar con el propietario los textos del asistente (saludo, despedida, advertencia de seguridad).
 
 ## 2. Legal y datos personales (Colombia)

@@ -132,6 +132,10 @@ Acciones (botones): `agregar {producto_id, cantidad}`, `quitar`, `ver_carrito`, 
 | GET | `/negocio` | Datos comerciales (los no confirmados vienen con `valor: null, confirmado: false`) |
 | GET | `/cotizaciones/:codigo` | Cotización (sin datos del cliente) |
 | GET | `/pedidos/seguimiento?codigo=PED-000001&telefono=300...` | Estado del pedido; exige código + teléfono |
+| POST | `/pedidos/:codigo/pago-en-linea` | Cuerpo `{ telefono }`. Crea el enlace de pago de Wompi por el saldo del pedido (503 si Wompi no está configurado; 409 si ya está pagado o el envío está por confirmar) |
+| GET | `/pagos/opciones` | `{ en_linea, proveedor, modo_pruebas }`: si la tienda ofrece pago en línea |
+| GET | `/envios/cotizar?ciudad=Bogotá` | `{ ciudad, costo, dias_estimados, fuente }`; `costo: null` = por confirmar con un asesor |
+| POST | `/pagos/wompi/eventos` | Aviso de Wompi (webhook). Solo se acepta con checksum válido; responde 401 si no |
 
 ## Integraciones (firma HMAC)
 

@@ -115,8 +115,8 @@ r.put(
 );
 
 // ---- Tarifas de envío ----
-// La tabla queda lista para el panel; el checkout todavía usa `costo_envio` de la
-// configuración y pasará a esta tabla en la fase 7 (ver docs/ARQUITECTURA.md § 10).
+// Fuente del costo de envío por ciudad para checkout, asistente y cotizaciones
+// (cotizarEnvio en modulos/negocio/servicio.ts; ver docs/ARQUITECTURA.md § 10).
 const esquemaTarifa = z.object({
   ciudad: z.string().trim().min(2).max(80),
   departamento: z.string().trim().max(80).nullable().optional(),

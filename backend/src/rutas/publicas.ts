@@ -8,9 +8,10 @@ import { atenderMensaje, saludar } from '../modulos/conversaciones/atencion';
 import { listarMensajes, obtenerConversacion, obtenerOCrear } from '../modulos/conversaciones/servicio';
 import { buscarRepuesto, compatibilidadesPorReferencia, compatiblesConModelo, disponibilidadPorReferencia, listarModelos } from '../modulos/catalogo/servicio';
 import { arbolDeCategorias, asegurarCategorias, categoriasHoja } from '../modulos/catalogo/categorias';
-import { informacionPublica } from '../modulos/negocio/servicio';
+import { cotizarEnvio, informacionPublica } from '../modulos/negocio/servicio';
 import { obtenerCotizacion } from '../modulos/cotizaciones/servicio';
 import { seguimientoPedido } from '../modulos/pedidos/servicio';
+import { iniciarPagoEnLinea, opcionesDePago } from '../modulos/pagos/servicio';
 import { AppError } from '../errores';
 
 export const rutasPublicas = Router();
@@ -118,6 +119,21 @@ rutasPublicas.get(
     const { conversacion_id: _omit, id: _id, ...publica } = c;
     ok(res, publica);
   }),
+);
+
+// Pago en línea: mismo control que el seguimiento (código + celular del pedido).
+rutasPublicas.post(
+  '/pedidos/:codigo/pago-en-linea',
+  limiteSeguimiento,
+  h(async (req, res) => {
+    const { telefono } = z.object({ telefono: z.string().min(7).max(20) }).parse(req.body);
+    ok(res, await iniciarPagoEnLinea(z.string().min(5).max(20).parse(req.params.codigo), telefono), 201);
+  }),
+);
+rutasPublicas.get('/pagos/opciones', (_req, res) => ok(res, opcionesDePago()));
+rutasPublicas.get(
+  '/envios/cotizar',
+  h(async (req, res) => ok(res, await cotizarEnvio(z.string().trim().max(80).default('').parse(req.query.ciudad)))),
 );
 
 rutasPublicas.get(
