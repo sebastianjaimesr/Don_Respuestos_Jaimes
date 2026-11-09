@@ -52,7 +52,7 @@ Ordenados por prioridad. ✅ = ya está hecho en el código; lo demás lo debe h
 - [ ] Carga masiva de productos y compatibilidades desde Excel/CSV.
 - [ ] Cerrar conversaciones inactivas (ej. 7 días) para que el contexto no quede viejo.
 - [ ] Pruebas automatizadas del frontend (hoy el frontend se probó con un recorrido automatizado en navegador, no con una suite versionada).
-- [ ] Integrar un LLM solo para extraer intención/datos de frases muy libres, manteniendo las herramientas como única fuente de datos.
+- [x] Jaimes AI con la API de Claude y herramientas de solo lectura (fase 6). Falta: crear la clave `ANTHROPIC_API_KEY` y un tope de gasto en la consola de Anthropic (docs/CONFIGURACION_SERVICIOS.md § 8), y probarla con conversaciones reales; las pruebas automáticas usan un cliente falso, sin la API real.
 - [ ] Pasarela de pagos (Wompi, PayU, Mercado Pago) en una versión futura; hoy no se procesan pagos.
 
 ## Ya resuelto en el código ✅

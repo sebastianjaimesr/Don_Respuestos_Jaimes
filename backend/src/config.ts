@@ -39,6 +39,15 @@ const esquema = z.object({
   WOMPI_SECRETO_EVENTOS: z.string().min(10).optional(),
   /** URL pública de la tienda, para volver a la página del pedido después de pagar. */
   TIENDA_URL: z.string().url().optional(),
+  // Jaimes AI con la API de Claude (docs/ARQUITECTURA.md § 6). Sin la clave, el chat usa el motor de reglas.
+  /** Clave de la API de Anthropic. SOLO backend, nunca en el frontend. */
+  ANTHROPIC_API_KEY: z.string().min(20).optional(),
+  IA_MODELO: z.string().min(3).default('claude-opus-5-5'),
+  IA_ESFUERZO: z.enum(['low', 'medium', 'high']).default('low'),
+  /** Máximo de llamadas a herramientas por mensaje del cliente. */
+  IA_MAX_HERRAMIENTAS: z.coerce.number().int().min(1).max(12).default(6),
+  /** Tope de mensajes atendidos con IA por día (hora de Colombia). Al superarlo, motor de reglas. */
+  IA_LIMITE_DIARIO_MENSAJES: z.coerce.number().int().min(0).default(500),
 });
 
 const vaciosComoUndefined = Object.fromEntries(

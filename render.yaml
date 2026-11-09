@@ -56,6 +56,17 @@ services:
       # URL pública de la tienda (para volver al pedido después de pagar), p. ej. https://sebastianjaimesr.github.io/Don_Respuestos_Jaimes
       - key: TIENDA_URL
         sync: false
+      # Jaimes AI (docs/CONFIGURACION_SERVICIOS.md § 8). Sin la clave, el chat usa el motor de reglas.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: IA_MODELO
+        value: claude-opus-5-5
+      - key: IA_ESFUERZO
+        value: low
+      - key: IA_MAX_HERRAMIENTAS
+        value: "6"
+      - key: IA_LIMITE_DIARIO_MENSAJES
+        value: "500"
 
 databases:
   - name: drj-db

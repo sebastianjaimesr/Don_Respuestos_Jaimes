@@ -482,7 +482,7 @@ async function buscarYPresentar(s: Estado) {
   });
 }
 
-function vendibilidad(p: ResultadoProducto): { vendible: boolean; razon?: string } {
+export function vendibilidad(p: ResultadoProducto): { vendible: boolean; razon?: string } {
   if (!p.compatibilidad.verificada) return { vendible: false, razon: 'compatibilidad_no_verificada' };
   if (!p.precio_confirmado) return { vendible: false, razon: 'precio_no_confirmado' };
   if (p.disponibilidad.estado === 'agotado' || p.disponibilidad.estado === 'sin_registro') return { vendible: false, razon: 'agotado' };
@@ -490,7 +490,7 @@ function vendibilidad(p: ResultadoProducto): { vendible: boolean; razon?: string
 }
 
 /** Solo muestra campos confirmados; lo no confirmado se dice explícitamente. */
-function formatoProducto(p: ResultadoProducto, numero: number | null): string {
+export function formatoProducto(p: ResultadoProducto, numero: number | null): string {
   const lineas = [`${numero ? numero + ') ' : ''}${p.nombre} — ${etiquetaTipo(p)}${p.tipo !== 'original' ? ` (${p.marca})` : ''}`];
   lineas.push(`• Referencia: ${p.referencia}`);
   lineas.push(

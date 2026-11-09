@@ -140,6 +140,25 @@ Cómo se protege el dinero:
 
 > ⚠️ Los dos secretos solo van en Render. La llave pública sí puede verse en el navegador (va en la URL de pago).
 
-## 8. (Futuro) Un modelo de lenguaje para entender mejor el texto
+## 8. Jaimes AI (API de Claude)
 
-La v1 entiende el texto con reglas (rápido, gratis y verificable). Si más adelante quieres un LLM para frases muy libres, la forma segura es usarlo **solo para extraer** modelo, año, repuesto e intención, y seguir llamando a las mismas herramientas (`buscar_repuesto`, `registrar_pedido`, `escalar_a_humano`) para los datos. El LLM nunca debe ser la fuente de precios, stock o compatibilidad.
+Sin clave, el chat funciona igual que antes con el motor de reglas. Con la clave, los mensajes de texto libre los atiende Claude usando herramientas de solo lectura del catálogo (docs/ARQUITECTURA.md § 6).
+
+1. Crea una cuenta en https://console.anthropic.com y agrega un método de pago (la API se cobra por tokens).
+2. En **Settings → Limits** pon un tope de gasto mensual. Es la protección más importante contra un costo inesperado.
+3. En **API Keys** crea una clave (empieza por `sk-ant-`). Cópiala una sola vez.
+4. En Render → servicio `drj-backend` → **Environment**, pega la clave en `ANTHROPIC_API_KEY` y guarda. Render reinicia el servicio.
+5. Prueba el chat con una frase libre, por ejemplo "se me están gastando los frenos de adelante de la fz, es 2018". En el panel, la tabla `mensajes` guarda en `metadata.ia` el modelo y los tokens de cada respuesta.
+
+Variables opcionales (ya tienen valor por defecto en `render.yaml`):
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `IA_MODELO` | `claude-opus-5-5` | Modelo de Claude |
+| `IA_ESFUERZO` | `low` | Cuánto razona antes de responder (`low`, `medium`, `high`). Más alto = más lento y más caro |
+| `IA_MAX_HERRAMIENTAS` | `6` | Consultas al catálogo por mensaje |
+| `IA_LIMITE_DIARIO_MENSAJES` | `500` | Mensajes con IA por día (hora de Colombia). Al superarlo responde el motor de reglas |
+
+> ⚠️ La clave **nunca** va en el frontend, en GitHub ni en n8n. Si se filtra, bórrala en la consola de Anthropic y crea otra.
+
+Qué revisar en `registros_eventos`: `ia_error` (la API falló y respondió el motor), `ia_rechazo`, `ia_incompleta`, `ia_limite_diario` y `ia_cifra_no_verificada` (el modelo escribió un precio que no salió del inventario y el sistema lo reemplazó).

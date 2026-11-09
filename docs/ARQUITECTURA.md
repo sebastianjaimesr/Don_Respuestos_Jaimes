@@ -303,6 +303,8 @@ Los roles se pueden ampliar desde el panel (`roles` y `rol_permisos`); la lista 
 
 ## 6. Jaimes AI
 
+> **Estado:** implementado en `backend/src/asistente/ia/` (fase 6). Las diferencias con este diseño están en § 6.8.
+
 ### 6.1 Flujo de un mensaje
 
 ```mermaid
@@ -381,6 +383,15 @@ La respuesta del chat agrega `tipo: "productos"` con `datos` tomados de la base 
 | `IA_LIMITE_DIARIO_MENSAJES` | Tope de mensajes con IA por día; al superarlo, motor de reglas |
 
 Se usan caché de prompt (sistema y herramientas estables al inicio), `tool_choice: auto` y el respaldo de servidor `fallbacks: "default"` ante rechazos. Cada respuesta registra tokens de entrada, salida y caché en `mensajes.metadata` para ver el costo en el panel.
+
+### 6.8 Cómo quedó implementado (diferencias con el diseño)
+
+- **Historial en texto.** Entre mensajes se reenvían solo los textos de la conversación (últimos 16), no los bloques completos de la API. Dentro de un mismo mensaje, el bucle de herramientas sí devuelve los bloques completos, incluidos los de razonamiento. Así no se guarda razonamiento en la BD y el historial es igual al que ve el asesor; el costo es que el modelo no recuerda su razonamiento anterior, que para ventas no hace falta. La moto, la búsqueda y el carrito llegan en el bloque `<estado>`.
+- **`buscar_productos` cubre `alternativas`.** Con `modelo_id` y `anio` usa la misma búsqueda verificada del motor (`buscarRepuesto`); el filtro `tipo` da la alternativa original o genérica. Sin moto hace la búsqueda general del catálogo y avisa al modelo que la compatibilidad no está confirmada.
+- **Acciones acotadas.** `agregar_al_carrito` y `solicitar_asesor` solo se anotan; al final del turno las ejecuta el motor con las acciones `agregar` y `escalar` de siempre. Solo se puede agregar un producto que salió vendible en una búsqueda por moto de esa conversación.
+- **Cuándo responde la IA.** Solo texto libre en la etapa `consulta`. Botones, datos de entrega, confirmación del pedido y mensajes que parecen tarjeta siguen en el motor. Si no hay clave, se superó el tope diario, la API falla, rechaza o no termina, responde el motor y queda un evento (`ia_error`, `ia_rechazo`, `ia_incompleta`, `ia_limite_diario`).
+- **Verificación de cifras.** Se buscan montos (`$68.000`, `68.000 pesos`, `68 mil`) en el texto del modelo; cada uno debe coincidir con un número devuelto por las herramientas o con el carrito. Si no, el texto se reemplaza y se registra `ia_cifra_no_verificada`.
+- **Uso.** `mensajes.metadata.ia` guarda modelo, tokens (entrada, salida, caché) y herramientas usadas en el primer mensaje de cada respuesta. Aún no se muestra en el panel.
 
 ### 6.7 RAG (opcional, después de la fase 6)
 
