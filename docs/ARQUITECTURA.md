@@ -200,6 +200,8 @@ erDiagram
 
 Convenciones actuales que se mantienen: prefijo `/api`, respuesta `{ ok: true, data }` o `{ ok: false, error: { codigo, mensaje } }`, validación con Zod, paginación `?pagina=&tamano=` (máximo 100), `Idempotency-Key` en creaciones de pedidos. Los endpoints actuales siguen funcionando; los que cambian de forma conservan la ruta vieja hasta la fase 8.
 
+> **Revisión de la fase 8:** ninguna ruta cambió de forma, así que no hubo rutas duplicadas que retirar. Las rutas de herramientas anteriores al catálogo (`/repuestos/buscar`, `/compatibilidades`, `/disponibilidad/:referencia`, `/modelos`, `/categorias`, `/categorias/arbol`) **se conservan**: ni el frontend ni los workflows de n8n del repositorio las usan hoy, pero son la API documentada para integraciones externas (docs/API.md) y tienen pruebas. Se retiran solo si el negocio confirma que nadie fuera del repositorio las llama.
+
 ### 4.1 Público (sin sesión)
 
 | Método y ruta | Uso |
@@ -408,6 +410,30 @@ Solo si el negocio tiene fichas técnicas o manuales reales: tabla `documentos_t
 - El filtro por moto se resuelve con `EXISTS` sobre `compatibilidades` (modelo, versión nula o igual, año dentro del rango).
 - Objetivo: menos de 150 ms por búsqueda con 50.000 productos; se mide en la fase 8 con datos sintéticos.
 
+**Medición de la fase 8** (`npm run medir-busqueda -w backend` sobre `database/benchmarks/catalogo_sintetico.sql`, 50.018 productos, PostgreSQL 16 local, p95 de 15 repeticiones):
+
+| Búsqueda | Antes | Después, sin promociones | Después, con 5 promociones |
+|---|---|---|---|
+| Portada del catálogo | 1.491 ms | 8 ms | 7 ms |
+| "pastillas de freno" | 1.828 ms | 73 ms | 81 ms |
+| Con errores ("pastiyas", "bugia") | ~1.950 ms | 33–59 ms | 50–56 ms |
+| SKU exacto | 1.617 ms | 23 ms | 10 ms |
+| Moto + año | 1.480 ms | 12 ms | 17 ms |
+| Moto + texto | 1.470 ms | 57 ms | 45 ms |
+| Categoría / moto + orden por precio | — | — | 61–88 ms |
+| Precio máximo + disponibles (todo el catálogo) | 212 ms | 57 ms | **293 ms** |
+| Orden por precio, página 50 (todo el catálogo) | 819 ms | 15 ms | **463 ms** |
+
+Qué se cambió (migración `014_rendimiento_busqueda.sql` y `catalogo/publico.ts`):
+
+1. `v_precio_vigente` lee las promociones vigentes una sola vez por consulta en vez de buscarlas por cada producto (mismas reglas que la 012).
+2. La tolerancia a errores ya no calcula Levenshtein contra el nombre de cada producto: compara la consulta con el vocabulario de los nombres (`palabras_catalogo`, mantenido por trigger) y busca con un índice GIN (`f_consulta_aprox`).
+3. El parecido de palabras usa el operador `<%` de `pg_trgm` con índice (umbral 0,45 fijado en cada conexión), en lugar de la función `word_similarity` sin índice.
+4. La página se arma en dos pasos: primero los 24 ids uniendo solo lo que usan los filtros y el orden, después la tarjeta completa de esos 24. El total tampoco une vistas que no filtran.
+5. Sin promociones vigentes, el filtro y el orden por precio usan `productos.precio` con índice (es el mismo valor).
+
+**Límite conocido:** con promociones vigentes, ordenar o filtrar por precio **todo** el catálogo sin otro filtro tarda 0,3–0,5 s con 50.000 productos, porque hay que calcular el precio con descuento de cada uno. Con categoría, moto o texto queda por debajo de 100 ms. Si el catálogo real crece a ese tamaño, la solución es guardar el precio vigente en una columna que se recalcule al crear, editar o vencer una promoción.
+
 ---
 
 ## 8. Imágenes
@@ -604,7 +630,7 @@ Lo actual se mantiene (Zod, SQL parametrizado, bcrypt, helmet, CORS cerrado, lí
 | Imágenes | — | Supabase Storage, bucket público de lectura |
 | IA | — | API de Claude, clave en Render |
 
-Variables nuevas del backend: `ANTHROPIC_API_KEY`, `IA_MODELO`, `IA_ESFUERZO`, `IA_MAX_HERRAMIENTAS`, `IA_LIMITE_DIARIO_MENSAJES`, `ALMACENAMIENTO`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET`, `COOKIE_DOMINIO`. `render.yaml` y `docs/DESPLIEGUE_RENDER.md` se actualizan en la fase 8.
+Variables nuevas del backend: `ANTHROPIC_API_KEY`, `IA_MODELO`, `IA_ESFUERZO`, `IA_MAX_HERRAMIENTAS`, `IA_LIMITE_DIARIO_MENSAJES`, `ALMACENAMIENTO`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET`, las de Wompi y `TIENDA_URL`. Están en `render.yaml` y en `docs/DESPLIEGUE_RENDER.md` (actualizados en la fase 8). `COOKIE_DOMINIO` no se implementó: hace falta solo cuando la tienda y el backend compartan un dominio propio (§ 5.1).
 
 ---
 

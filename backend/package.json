@@ -11,6 +11,7 @@
     "db:migrar": "tsx src/scripts/migrar.ts",
     "db:demo": "tsx src/scripts/cargarDemo.ts",
     "crear-admin": "tsx src/scripts/crearAdmin.ts",
+    "medir-busqueda": "tsx src/scripts/medirBusqueda.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

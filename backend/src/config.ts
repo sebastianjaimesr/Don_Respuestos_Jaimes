@@ -55,10 +55,6 @@ const vaciosComoUndefined = Object.fromEntries(
 );
 
 const resultado = esquema
-  .refine((c) => c.ALMACENAMIENTO !== 'supabase' || (c.SUPABASE_URL && c.SUPABASE_SERVICE_KEY), {
-    message: 'Con ALMACENAMIENTO=supabase debes definir SUPABASE_URL y SUPABASE_SERVICE_KEY',
-    path: ['ALMACENAMIENTO'],
-  })
   .refine(
     (c) => {
       const n = [c.WOMPI_LLAVE_PUBLICA, c.WOMPI_SECRETO_INTEGRIDAD, c.WOMPI_SECRETO_EVENTOS].filter(Boolean).length;
@@ -74,4 +70,11 @@ if (!resultado.success) {
 }
 
 export const config = resultado.data;
+
+// render.yaml trae ALMACENAMIENTO=supabase desde antes de tener las llaves. Sin ellas el servidor
+// arranca igual y el panel muestra "imágenes no configuradas", en vez de no arrancar.
+if (config.ALMACENAMIENTO === 'supabase' && !(config.SUPABASE_URL && config.SUPABASE_SERVICE_KEY)) {
+  console.warn('⚠ ALMACENAMIENTO=supabase sin SUPABASE_URL y SUPABASE_SERVICE_KEY: la subida de fotos queda desactivada. Ver docs/CONFIGURACION_SERVICIOS.md § 6');
+  config.ALMACENAMIENTO = undefined;
+}
 export type Config = typeof config;
