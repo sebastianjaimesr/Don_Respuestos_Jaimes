@@ -2,6 +2,7 @@ import { pool } from '../../db';
 import { procesar, SALUDO } from '../../asistente/motor';
 import type { AccionEntrada, Respuesta } from '../../asistente/tipos';
 import { pareceTarjeta } from '../../asistente/extraccion';
+import { intentarIA } from '../../asistente/ia';
 import { asesorAtendiendo, Conversacion, guardarContexto, guardarMensaje, obtenerConversacion } from './servicio';
 
 export interface ResultadoAtencion {
@@ -38,16 +39,21 @@ export async function atenderMensaje(conv: Conversacion, entrada: { texto?: stri
       return { conversacion_id: actual.id, estado: actual.estado, asesor_atendiendo: true, respuestas: [], texto_respuesta: '' };
     }
 
-    const r = await procesar({
+    const entradaMotor = {
       conversacionId: actual.id,
       estadoConversacion: actual.estado,
       contexto: actual.contexto,
       texto: entrada.texto,
       accion: entrada.accion,
-    });
+    };
+    // Texto libre: Jaimes AI si está configurada; si no (o si falla), el motor de reglas.
+    const conIA = await intentarIA(entradaMotor);
+    const r = conIA ?? (await procesar(entradaMotor));
     const guardadas = [];
-    for (const resp of r.respuestas) {
-      const m = await guardarMensaje(actual.id, 'asistente', resp.texto, { tipo: resp.tipo, datos: resp.datos ?? null, acciones: resp.acciones ?? [] });
+    for (const [i, resp] of r.respuestas.entries()) {
+      const meta: Record<string, unknown> = { tipo: resp.tipo, datos: resp.datos ?? null, acciones: resp.acciones ?? [] };
+      if (conIA && i === 0) meta.ia = conIA.ia; // modelo y tokens del turno, una sola vez
+      const m = await guardarMensaje(actual.id, 'asistente', resp.texto, meta);
       guardadas.push({ ...resp, mensaje_id: m.id as number });
     }
     await guardarContexto(actual.id, r.contexto, r.clienteId);
